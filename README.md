@@ -29,6 +29,9 @@ Initial code
   communicated to the simulation engines are just a 2-tuple of coordinates
 - We're going to do communication with [ZeroMQ](http://www.zeromq.org/),
   and specifically the python [pyzmq](http://zeromq.github.io/pyzmq/) bindings.
+  This stuff is a little bit lower level than workqueue, but it's
+  **battle tested** and used in real production systems. Also, our
+  communication architecture is pretty simple.
 
 
 Communication structure
