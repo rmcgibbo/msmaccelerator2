@@ -88,7 +88,7 @@ workflow would be something like:
 $ accelerator serve &  # runs in background
 
 repeat N times:
-  - run M
+  - run M times
       $ accelerator simulate
     wait for them to exit
   - run one
@@ -96,9 +96,12 @@ repeat N times:
     wait for it to finish
 ```
 
+Take a look at the file `submit`, which is a little python script that does
+exactly this.
+
 Note that this doesn't really tie us to PBS at all, but it does *let* us use pbs if
 we want to, because the N x M structure of the jobs is laid out at the beginning.
-But we don't have to worrry about handling state between the different simulate and
+But we don't have to worry about handling state between the different simulate and
 model rounds by writing out to the filesystem or saving ENV variables, because we
 have this little lightweight ZMQ server who can tell each process what to do, when
 it comes online.
