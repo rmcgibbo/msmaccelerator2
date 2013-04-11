@@ -10,6 +10,7 @@ Simple simulation process. Two dimensional dynamics on a lattice.
 import os
 import zmq
 import numpy as np
+import time
 
 # local
 from ..core.message import message
@@ -25,15 +26,20 @@ def simulate(req, header, parent_header, content):
     box_size = content['box_size']
     outdir = content['outdir']
 
+    print 'Simulation: Let\'s do this!'
+
     trajectory = np.zeros((steps+1, 2))
     trajectory[0] = starting_structure
 
     # simulate the trajectory
     for i in range(steps):
-        # 2 random numbers that are both uniform from {-1, 1}
-        r = 2*(np.random.randint(2, size=2) - 0.5)
+        # 2 random numbers that are both uniform from {-1, 0, 1}
+        r = np.random.randint(3, size=2) - 1
         # increment the trajectory, with periodic boundary conditions
-        trajectory[i+1] = np.mod(trajectory[0] + r, box_size)
+        trajectory[i+1] = np.mod(trajectory[i] + r, box_size)
+
+    # make this take a little bit of time, so that it's more fun
+    time.sleep(2)
 
     # save the trajectory to disk
     outfn = os.path.join(outdir, header['msg_id'] + '.npy')
@@ -57,4 +63,3 @@ def main(url, port):
 
 if __name__ == '__main__':
     main()
-

@@ -30,11 +30,13 @@ def cluster(req, header, parent_header, content):
     # form a unique number for each row, using a big prime (the eigth Mersenne)
     col = data[:, 0]*2147483647 + data[:, 1]
     # this is the number of unique data points in trajs
-    n_unique = len(np.unique(col))
+    unique = np.unique(col)
+    n_unique = len(unique)
 
-    # simple way to cluster them together, using scipy
-    allassignments = fclusterdata(data, t=n_unique, criterion='maxclust')
-    # need to subtrack one because fclusterdata starts the counting at 1, not 0
+    # simple way to cluster them together
+    allassignments = np.digitize(col, bins=unique)
+    #allassignments = fclusterdata(data, t=n_unique, criterion='maxclust')
+    # need to subtrack one because the digitizer starts the counting at 1, not 0
     allassignments -= 1
     # get the first data point assigned to each cluster
     centers = np.array([data[allassignments == i][0] for i in range(n_unique)])

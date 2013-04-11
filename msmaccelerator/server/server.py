@@ -221,7 +221,7 @@ class ToyMaster(DispatchBase):
         distibution in self.weights
         """
         l = np.where(np.random.multinomial(1, self.weights) == 1)[0][0]
-        return [float(e) for e in self.structures[np.random.randint(l)]]
+        return [float(e) for e in self.structures[l]]
 
     ########################################################################
     # BEGIN HANDLERS FOR INCOMMING MESSAGES
