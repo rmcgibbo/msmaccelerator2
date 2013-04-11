@@ -1,4 +1,4 @@
-# MSMAccelerator server
+## MSMAccelerator server
 
 The server manages a ZMQ socket, on which it replies to messages.
 The messages are basically either a simulator saying "give me some initial conditions"
