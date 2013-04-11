@@ -22,7 +22,7 @@ Design
   to a single MD engine.
 
 
-Initial Code
+Initial code
 ------------
 - For the initial code, the "simulation" is dynamics on a 2d lattice with
   simple PBCs. This means that the starting structures that need to be
@@ -31,7 +31,7 @@ Initial Code
   and specifically the python [pyzmq](http://zeromq.github.io/pyzmq/) bindings.
 
 
-Communication Structure
+Communication structure
 -----------------------
 - A "server" process (see `server.py`) runs with a ZMQ REP (reply) socket. It
   is capable of communicting with both "simulators" and "clusterers". When
@@ -55,7 +55,7 @@ Communication Structure
   is being used) could be done within the "simulator" object.
 
 
-Execution Structure
+Execution structure
 -------------------
 Both the simulator and the clusterer exit when they're done with a single
 round. **This is important** because it means that we can run the entire
@@ -64,3 +64,27 @@ clustering "jobs". But to control them and manage the state between rounds,
 we need to have the server process running in the background. The only thing
 that should need to be coordinated between the processes when you're writing
 the PBS scripts that call is the url and port for the ZMQ connection.
+
+Testing the code 
+----------------
+Currently, this isn't an installable package. Just run `python msmaccelerator/server.py`
+to start the server, and then run `python msmaccelerator/simulation.py` to
+run a single simulation job and `python msmaccelerator/clusterer.py` to run
+a clustering job.
+
+Going forward, the structure for a set of PBS jobs that orchestrate the whole
+workflow would be something like:
+
+```
+start the server.py
+
+repeat:
+  run N simulation.py jobs
+  wait for them to exit
+  run a single clusterer.py
+  wait for it to finish
+```
+
+License
+-------
+GPLv3s
