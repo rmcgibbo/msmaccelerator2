@@ -1,6 +1,6 @@
 MSMAccelerator2
 ===============
-*sketch* for a next-generation MSMAccelerator app.
+Next-generation MSMAccelerator app.
 
 Design
 ------
