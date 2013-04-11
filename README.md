@@ -4,9 +4,9 @@ MSMAccelerator2
 
 Design
 ------
-- The app should be designed to work on relatively homogeneous clusters with a
-  PBS system. This means that we can expect a bunch of jobs to be started at
-  the same time, and finish at about the same time.
+- The app should be able to work on clusters with PBS systems. That means
+  being able to work within the constraints of a queueing system, and taking
+  advantage of the shared filesystem.
 - Clustering and MSM-building cannot be required to happen on the head node,
   because many HPC clusters do not allow this. There needs to be separate
   "jobs" submitted for the MSM building.
@@ -46,12 +46,13 @@ Communication structure
   absolute path on the local system, but in the future it could be a S3 bucket
   or something. But we really *should* take advantage of shared filesystems
   on clusters.
-- When a "clusterer" comes online, it bigs the server who replies with a list
-  of all of the trajectories currently on disk. It builds an msm and pings the
+- When a "clusterer" comes online, it pings the server who replies with a list
+  of all of the trajectories currently on disk. It builds an msm and tells the
   server when it's done. When the server hears that the MSM is built, it loads
   some info from the MSM (currently the cluster centers and eq. populations)
   which it uses to generate future starting structures (currently by sampling
-  from the multinomial)
+  from the multinomial). This is where we plug in new adaptive sampling
+  algorithms.
 - It's really important that the server process have a LIGHT memory and
   compute footprint. If need-be, the actual selection of the starting
   structure (e.g. from the multinomial or whatever adaptive sampling strategy
@@ -59,7 +60,7 @@ Communication structure
   is getting too expensive within the server.
 - All of the messages sent over the sockets will be JSON-encoded, following
   (basically), the structure set out by the IPython project for communication
-  between the kernel and the frontends. Eventually, I want to log all of these
+  between the kernel and the frontends. I also want to log all of these
   messages to a database like mongodb that plays nice with JSON. The exact
   format of the messages is described in `msmaccelerator/message.py`. For some
   background, you can also ready the [IPython messaging specification](http://ipython.org/ipython-doc/dev/development/messaging.html).
@@ -77,23 +78,30 @@ the PBS scripts that call is the url and port for the ZMQ connection.
 
 Testing the code 
 ----------------
-Currently, this isn't an installable package. Just run `python msmaccelerator/server.py`
-to start the server, and then run `python msmaccelerator/simulation.py` to
-run a single simulation job and `python msmaccelerator/clusterer.py` to run
-a clustering job.
+Everything is runnable from a single executable, `accelerator`, whose subcommands
+are `serve`, `model` and `simulate`
 
 Going forward, the structure for a set of PBS jobs that orchestrate the whole
 workflow would be something like:
 
 ```
-start the server.py process
+$ accelerator serve &  # runs in background
 
-repeat:
-  - run N simulation.py jobs
+repeat N times:
+  - run M
+      $ accelerator simulate
     wait for them to exit
-  - run a single clusterer.py job
+  - run one
+      $ accelerator model
     wait for it to finish
 ```
+
+Note that this doesn't really tie us to PBS at all, but it does *let* us use pbs if
+we want to, because the N x M structure of the jobs is laid out at the beginning.
+But we don't have to worrry about handling state between the different simulate and
+model rounds by writing out to the filesystem or saving ENV variables, because we
+have this little lightweight ZMQ server who can tell each process what to do, when
+it comes online.
 
 License
 -------
