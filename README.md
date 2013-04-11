@@ -77,21 +77,21 @@ the PBS scripts that call is the url and port for the ZMQ connection.
 
 Testing the code 
 ----------------
-Currently, this isn't an installable package. Just run `python msmaccelerator/server.py`
-to start the server, and then run `python msmaccelerator/simulation.py` to
-run a single simulation job and `python msmaccelerator/clusterer.py` to run
-a clustering job.
+Everything is runnable from a single executable, `accelerator`, whose subcommands
+are `serve`, `model` and `simulate`
 
 Going forward, the structure for a set of PBS jobs that orchestrate the whole
 workflow would be something like:
 
 ```
-start the server.py process
+$ accelerator serve &  # runs in background
 
-repeat:
-  - run N simulation.py jobs
+repeat N times:
+  - run M
+      $ accelerator simulate
     wait for them to exit
-  - run a single clusterer.py job
+  - run one
+      $ accelerator model
     wait for it to finish
 ```
 
