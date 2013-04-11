@@ -36,9 +36,18 @@ Initial code
 
 Communication structure
 -----------------------
-- A "server" process (see `server.py`) runs with a ZMQ REP (reply) socket. It
-  is capable of communicting with both "simulators" and "clusterers". When
-  a "simulator" comes online, it pings the server who replies with an
+The communication structure is really modeled off the FAH workserver, instead
+of workqueue. The accelerator server responds to requests. *It doesn't
+initiate them*. The two types of requests it (basically) responds to are
+a simulator coming online and saying "let me run a simulation", and a
+"modeler" coming online and saying "let me build an MSM". The interleaving
+of these two processes -- how many of each to run, how many cycles, etc, is
+NOT controlled by the server. That is the domain of the queueing system or
+whatever.
+
+- The server process (`accelerator serve`) runs with a ZMQ REP (reply) socket. It
+  is capable of communicating with both simulators and modelers. When
+  a simulator comes online, it pings the server who replies with an
   initial structure. When the simulator is done, it tells the server and then
   exits.
 - Note that the simulator does not actually send back any data, it just sends
@@ -46,18 +55,19 @@ Communication structure
   absolute path on the local system, but in the future it could be a S3 bucket
   or something. But we really *should* take advantage of shared filesystems
   on clusters.
-- When a "clusterer" comes online, it pings the server who replies with a list
-  of all of the trajectories currently on disk. It builds an msm and tells the
+- When a modeler comes online, it pings the server who replies with a list
+  of all of the trajectories currently on disk. It builds an MSM and tells the
   server when it's done. When the server hears that the MSM is built, it loads
   some info from the MSM (currently the cluster centers and eq. populations)
   which it uses to generate future starting structures (currently by sampling
   from the multinomial). This is where we plug in new adaptive sampling
   algorithms.
-- It's really important that the server process have a LIGHT memory and
-  compute footprint. If need-be, the actual selection of the starting
-  structure (e.g. from the multinomial or whatever adaptive sampling strategy
-  is being used) could be done within the "simulator" process if the selection
-  is getting too expensive within the server.
+- It's really important that the server have a LIGHT memory and compute
+  footprint, because its probably going to run on the head node. If need-be,
+  the actual selection of the starting structure (e.g. from the multinomial
+  or whatever adaptive sampling strategy is being used) could be done within
+  the "simulator" process if the selection is getting too expensive within
+  the server.
 - All of the messages sent over the sockets will be JSON-encoded, following
   (basically), the structure set out by the IPython project for communication
   between the kernel and the frontends. I also want to log all of these
@@ -75,6 +85,9 @@ clustering "jobs". But to control them and manage the state between rounds,
 we need to have the server process running in the background. The only thing
 that should need to be coordinated between the processes when you're writing
 the PBS scripts that call is the url and port for the ZMQ connection.
+
+But the server itself is AGNOSTIC to the ordering or interleaving of the
+simulators and modelers.
 
 Testing the code 
 ----------------
