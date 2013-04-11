@@ -76,13 +76,13 @@ Going forward, the structure for a set of PBS jobs that orchestrate the whole
 workflow would be something like:
 
 ```
-start the server.py
+start the server.py process
 
 repeat:
-  run N simulation.py jobs
-  wait for them to exit
-  run a single clusterer.py
-  wait for it to finish
+  - run N simulation.py jobs
+    wait for them to exit
+  - run a single clusterer.py job
+    wait for it to finish
 ```
 
 License
