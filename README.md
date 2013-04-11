@@ -103,6 +103,23 @@ model rounds by writing out to the filesystem or saving ENV variables, because w
 have this little lightweight ZMQ server who can tell each process what to do, when
 it comes online.
 
+Database
+--------
+To track the messages, I'm using `MongoDB`. To make it easy, I'm using this cloud mongodb
+service called [MongoHQ](https://www.mongohq.com/home). You can go there and sign up
+for a free account. Then, find the URI used to connect to your database. It should look
+like `mongodb://<user>:<password>@dharma.mongohq.com:10077/msmaccelerator`. Substitute in
+your real username and password, and then export it as the environment variable `MONGO_URL`,
+like
+
+`$ export MONGO_URL='mongodb://<user>:<password>@dharma.mongohq.com:10077/msmaccelerator'`
+
+Currently, all the messages will be saved, when they hit the server, both on the sending and
+recieving end. On the MongoHQ website, you can track the status of the messages.
+
+For example, if you input `find({"header.msg_type": "register_simulator"}).limit(10)` into their
+search box, you'll see all the events that correspond to a new simulation starting up.
+
 License
 -------
 GPLv3s
