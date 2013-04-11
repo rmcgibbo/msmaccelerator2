@@ -1,5 +1,7 @@
 ## Code for running the simulation
 
+This code is run by `$ accelerator simulate`
+
 ### Flow
 - simulator boots up
 - connect to server
