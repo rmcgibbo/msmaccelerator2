@@ -53,6 +53,12 @@ Communication structure
   compute footprint. If need-be, the actual selection of the starting
   structure (e.g. from the multinomial or whatever adaptive sampling strategy
   is being used) could be done within the "simulator" object.
+- All of the messages sent over the sockets will be JSON-encoded, following
+  (basically), the structure set out by the IPython project for communication
+  between the kernel and the frontends. Eventually, I want to log all of these
+  messages to a database like mongodb that plays nice with JSON. The exact
+  format of the messages is described in `msmaccelerator/message.py`. For some
+  background, you can also ready the IPython messaging spec [here](http://ipython.org/ipython-doc/dev/development/messaging.html) 
 
 
 Execution structure
