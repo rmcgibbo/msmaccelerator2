@@ -4,9 +4,9 @@ MSMAccelerator2
 
 Design
 ------
-- The app should be designed to work on relatively homogeneous clusters with a
-  PBS system. This means that we can expect a bunch of jobs to be started at
-  the same time, and finish at about the same time.
+- The app should be able to work on clusters with PBS systems. That means
+  being able to work within the constraints of a queueing system, and taking
+  advantage of the shared filesystem.
 - Clustering and MSM-building cannot be required to happen on the head node,
   because many HPC clusters do not allow this. There needs to be separate
   "jobs" submitted for the MSM building.
