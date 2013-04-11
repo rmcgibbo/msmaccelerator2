@@ -17,7 +17,6 @@ import zmq
 from zmq.eventloop import ioloop
 from zmq.eventloop.zmqstream import ZMQStream
 import numpy as np
-from pymongo import Connection
 
 # local
 from ..core.message import message
@@ -41,15 +40,52 @@ class DispatchBase(object):
     """
     ctx = zmq.Context()
 
-    def __init__(self, ctx, url, mongo_url=None, db_name=None):
+    def __init__(self, ctx, url, use_db=True, mongo_url=None, db_name=None):
         """Initiaize the base class.
 
         This sets up the sockets and stuff
+
+        Parameters
+        ----------
+        ctx : zmq.Context
+            The zeromq context.
+        url : string
+            The zmq url that we should listen on. This should be fully
+            qualified, like tcp://127.0.0.1:12345 or something
+        use_db : bool
+            Do you want to connect to a database to log the messages?
+        mongo_url : string
+            The url for the mongodb. This can be either passed in or
+            read from the environment variable MONGO_URL. It should be a
+            string like:
+                mongodb://<user>:<pass>@hatch.mongohq.com:10034/msmaccelerator
+        db_name : string
+            The name of the database (or maybe collection?). If not supplied,
+            its infered by chopping off the last bit of the mongo_url string,
+            after the last "/".
         """
         s = ctx.socket(zmq.REP)
         s.bind(url)
         self._stream = ZMQStream(s)
         self._stream.on_recv_stream(self._dispatch)
+
+        self.db = None
+        if use_db:
+            self._initialize_database(mongo_url, db_name)
+
+    def _initialize_database(self, mongo_url=None, db_name=None):
+        try:
+            from pymongo import Connection
+        except ImportError:
+            print '#'*80
+            print 'You need to install PyMongo, the MongoDB client.'
+            print 'You can get it from here: https://pypi.python.org/pypi/pymongo/'
+            print 'Or install it directly with your python package manager using'
+            print '$ easy_install pymongo'
+            print 'or '
+            print '$ pip install pymongo'
+            print '#'*80
+            raise
 
         if mongo_url is None:
             mongo_url = os.getenv('MONGO_URL')
@@ -57,16 +93,21 @@ class DispatchBase(object):
         if mongo_url is None:
             raise ValueError('Could not connect to database. You need to '
                 'add an env variable MONGO_URL with the url for the mongo '
-                'instance. See http://blog.mongohq.com/blog/2012/02/20/connecting-to-mongohq/')
-        else:
-            c = Connection(mongo_url)
-            if db_name is None:
-                # this gets the name of the db from the mongo url
-                # we should do more validation here
-                db_name = mongo_url.split('/')[-1]
-                print 'PARSED DB NAME:', db_name
-            # database name
-            self.db = getattr(c, db_name)
+                'instance. If you\'re running you own mongo server, then '
+                'this will be some kind of localhost url. Its recommended '
+                'instead that you use a cloud Database-as-a-service like '
+                'MongoHQ or MongoLab. They will give you a url to connect to'
+                'your db. See http://blog.mongohq.com/blog/2012/02/20/connecting-to-mongohq/ '
+                'for some details')
+
+        c = Connection(mongo_url)
+        if db_name is None:
+            # this gets the name of the db from the mongo url
+            # we should do more validation here
+            db_name = mongo_url.split('/')[-1]
+            print 'PARSED DB NAME:', db_name
+        # database name
+        self.db = getattr(c, db_name)
 
 
     def send_message(self, msg_type, content, parent_header=None):
@@ -88,7 +129,8 @@ class DispatchBase(object):
         """
         msg = message(msg_type, content, parent_header=parent_header)
         print 'SENDING', msg
-        self.db.messages.save(msg.copy())
+        if self.db is not None:
+            self.db.messages.save(msg.copy())
         self._stream.send_json(msg)
 
     def _dispatch(self, stream, messages):
@@ -108,7 +150,8 @@ class DispatchBase(object):
         for raw_msg in messages:
             msg = json.loads(raw_msg)
             print 'RECEIVING', msg
-            self.db.messages.save(msg.copy())
+            if self.db is not None:
+                self.db.messages.save(msg.copy())
             self._validate_msg(msg)
             # _validate_msg checks to ensure this lookup succeeds
             responder = getattr(self, msg['header']['msg_type'])
@@ -235,5 +278,3 @@ def main(port):
 
 if __name__ == '__main__':
     main()
-
-
