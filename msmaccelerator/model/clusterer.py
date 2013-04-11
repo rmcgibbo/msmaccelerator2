@@ -74,7 +74,7 @@ def cluster(req, header, parent_header, content):
 def main(url, port):
     ctx = zmq.Context()
     req = ctx.socket(zmq.REQ)
-    req.connect('tcp://%s:%s' % url, int(port))
+    req.connect('tcp://%s:%s' % (url, int(port)))
     # send the "here i am" message
     req.send_json(message(msg_type='register_clusterer', content={}))
 

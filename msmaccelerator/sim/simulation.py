@@ -36,7 +36,7 @@ def simulate(req, header, parent_header, content):
         trajectory[i+1] = np.mod(trajectory[0] + r, box_size)
 
     # save the trajectory to disk
-    outfn = os.path.join(outdir, header['msg_id'] + '.npy'),
+    outfn = os.path.join(outdir, header['msg_id'] + '.npy')
     np.save(outfn, trajectory)
 
     # tell the master that I'm done
@@ -49,7 +49,7 @@ def simulate(req, header, parent_header, content):
 def main(url, port):
     ctx = zmq.Context()
     req = ctx.socket(zmq.REQ)
-    req.connect('tcp://%s:%s' % url, int(port))
+    req.connect('tcp://%s:%s' % (url, int(port)))
 
     req.send_json(message(msg_type='register_simulator', content={}))
     msg = req.recv_json()

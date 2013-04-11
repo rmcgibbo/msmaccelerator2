@@ -17,6 +17,7 @@ import zmq
 from zmq.eventloop import ioloop
 from zmq.eventloop.zmqstream import ZMQStream
 import numpy as np
+from pymongo import Connection
 
 # local
 from ..core.message import message
@@ -40,7 +41,7 @@ class DispatchBase(object):
     """
     ctx = zmq.Context()
 
-    def __init__(self, ctx, url):
+    def __init__(self, ctx, url, mongo_url=None, db_name=None):
         """Initiaize the base class.
 
         This sets up the sockets and stuff
@@ -49,6 +50,24 @@ class DispatchBase(object):
         s.bind(url)
         self._stream = ZMQStream(s)
         self._stream.on_recv_stream(self._dispatch)
+
+        if mongo_url is None:
+            mongo_url = os.getenv('MONGO_URL')
+
+        if mongo_url is None:
+            raise ValueError('Could not connect to database. You need to '
+                'add an env variable MONGO_URL with the url for the mongo '
+                'instance. See http://blog.mongohq.com/blog/2012/02/20/connecting-to-mongohq/')
+        else:
+            c = Connection(mongo_url)
+            if db_name is None:
+                # this gets the name of the db from the mongo url
+                # we should do more validation here
+                db_name = mongo_url.split('/')[-1]
+                print 'PARSED DB NAME:', db_name
+            # database name
+            self.db = getattr(c, db_name)
+
 
     def send_message(self, msg_type, content, parent_header=None):
         """Send a message out on the stream
@@ -69,6 +88,7 @@ class DispatchBase(object):
         """
         msg = message(msg_type, content, parent_header=parent_header)
         print 'SENDING', msg
+        self.db.messages.save(msg.copy())
         self._stream.send_json(msg)
 
     def _dispatch(self, stream, messages):
@@ -88,6 +108,7 @@ class DispatchBase(object):
         for raw_msg in messages:
             msg = json.loads(raw_msg)
             print 'RECEIVING', msg
+            self.db.messages.save(msg.copy())
             self._validate_msg(msg)
             # _validate_msg checks to ensure this lookup succeeds
             responder = getattr(self, msg['header']['msg_type'])
