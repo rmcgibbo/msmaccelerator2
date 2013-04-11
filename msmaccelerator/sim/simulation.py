@@ -12,7 +12,7 @@ import zmq
 import numpy as np
 
 # local
-from message import message
+from ..core.message import message
 
 #############################################################################
 # Handlers
@@ -46,11 +46,15 @@ def simulate(req, header, parent_header, content):
     }, parent_header=header))
 
 
-if __name__ == '__main__':
+def main(url, port):
     ctx = zmq.Context()
     req = ctx.socket(zmq.REQ)
-    req.connect('tcp://127.0.0.1:12345')
+    req.connect('tcp://%s:%s' % url, int(port))
 
     req.send_json(message(msg_type='register_simulator', content={}))
     msg = req.recv_json()
     globals()[msg['header']['msg_type']](req, **msg)
+
+if __name__ == '__main__':
+    main()
+

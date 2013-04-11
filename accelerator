@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+from argparse import ArgumentParser
+
+
+def serve(args):
+    from msmaccelerator.server import server
+    server.main(args.zmq_port)
+    
+def model(args):
+    from msmaccelerator.model import clusterer
+    clusterer.main(args.server_url, args.zmq_port)
+    
+def simulate(args):
+    from msmaccelerator.sim import simulation
+    simulation.main(args.server_url, args.zmq_port)
+
+
+def main():
+    default_port = 12345
+    
+    parser = ArgumentParser(description="""MSMAccelerator main executable""")
+    subparsers = parser.add_subparsers(dest='subparser_name')
+
+    serve_parser = subparsers.add_parser('serve')
+    serve_parser.add_argument('zmq_port', type=int, default=default_port,
+        help='port to serve on. default=%s' % default_port)
+
+    model_parser = subparsers.add_parser('model')
+    model_parser.add_argument('zmq_port', type=int, default=default_port,
+        help='port to connect to server on. default=%s' % default_port)
+    model_parser.add_argument('server_url', default='127.0.0.1')
+
+    simulate_parser = subparsers.add_parser('simulate')
+    simulate_parser.add_argument('zmq_port', type=int, default=default_port,
+        help='port to connect to server on. default=%s' % default_port)
+    simulate_parser.add_argument('server_url', default='127.0.0.1')
+
+    args = parser.parse_args()
+
+    commands = {
+        'serve': serve,
+        'model': model,
+        'simulate': simulate,
+    }
+    commands[args.subparser_name](args)
+    
+if __name__ == '__main__':
+    main()

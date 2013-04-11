@@ -13,7 +13,7 @@ from scipy.cluster.hierarchy import fclusterdata
 from msmbuilder.MSMLib import get_count_matrix_from_assignments, build_msm
 
 # local
-from message import message
+from ..core.message import message
 
 #############################################################################
 # Handlers
@@ -71,13 +71,16 @@ def cluster(req, header, parent_header, content):
     }, parent_header=header))
 
 
-if __name__ == '__main__':
+def main(url, port):
     ctx = zmq.Context()
     req = ctx.socket(zmq.REQ)
-    req.connect('tcp://127.0.0.1:12345')
+    req.connect('tcp://%s:%s' % url, int(port))
     # send the "here i am" message
     req.send_json(message(msg_type='register_clusterer', content={}))
 
     # receive a single message and respond to it
     msg = req.recv_json()
     globals()[msg['header']['msg_type']](req, **msg)
+
+if __name__ == '__main__':
+    main()

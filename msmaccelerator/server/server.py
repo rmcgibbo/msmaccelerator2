@@ -19,7 +19,7 @@ from zmq.eventloop.zmqstream import ZMQStream
 import numpy as np
 
 # local
-from message import message
+from ..core.message import message
 
 
 ##############################################################################
@@ -204,10 +204,15 @@ class ToyMaster(DispatchBase):
     # END HANDLERS FOR INCOMMING MESSAGES
     ########################################################################
 
-if __name__ == '__main__':
+
+def main(port):
     # install the tornado event loop. this needs to be done first
     ioloop.install()
-
     ctx = zmq.Context()
-    dispatch = ToyMaster(ctx=ctx, url='tcp://127.0.0.1:12345')
+    dispatch = ToyMaster(ctx=ctx, url='tcp://*:%s' % int(port))
     ioloop.IOLoop.instance().start()
+
+if __name__ == '__main__':
+    main()
+
+
