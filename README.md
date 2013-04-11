@@ -55,7 +55,8 @@ Communication structure
 - It's really important that the server process have a LIGHT memory and
   compute footprint. If need-be, the actual selection of the starting
   structure (e.g. from the multinomial or whatever adaptive sampling strategy
-  is being used) could be done within the "simulator" object.
+  is being used) could be done within the "simulator" process if the selection
+  is getting too expensive within the server.
 - All of the messages sent over the sockets will be JSON-encoded, following
   (basically), the structure set out by the IPython project for communication
   between the kernel and the frontends. Eventually, I want to log all of these
