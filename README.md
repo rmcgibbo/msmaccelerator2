@@ -46,12 +46,13 @@ Communication structure
   absolute path on the local system, but in the future it could be a S3 bucket
   or something. But we really *should* take advantage of shared filesystems
   on clusters.
-- When a "clusterer" comes online, it bigs the server who replies with a list
-  of all of the trajectories currently on disk. It builds an msm and pings the
+- When a "clusterer" comes online, it pings the server who replies with a list
+  of all of the trajectories currently on disk. It builds an msm and tells the
   server when it's done. When the server hears that the MSM is built, it loads
   some info from the MSM (currently the cluster centers and eq. populations)
   which it uses to generate future starting structures (currently by sampling
-  from the multinomial)
+  from the multinomial). This is where we plug in new adaptive sampling
+  algorithms.
 - It's really important that the server process have a LIGHT memory and
   compute footprint. If need-be, the actual selection of the starting
   structure (e.g. from the multinomial or whatever adaptive sampling strategy
@@ -59,7 +60,7 @@ Communication structure
   is getting too expensive within the server.
 - All of the messages sent over the sockets will be JSON-encoded, following
   (basically), the structure set out by the IPython project for communication
-  between the kernel and the frontends. Eventually, I want to log all of these
+  between the kernel and the frontends. I also want to log all of these
   messages to a database like mongodb that plays nice with JSON. The exact
   format of the messages is described in `msmaccelerator/message.py`. For some
   background, you can also ready the [IPython messaging specification](http://ipython.org/ipython-doc/dev/development/messaging.html).
@@ -94,6 +95,13 @@ repeat N times:
       $ accelerator model
     wait for it to finish
 ```
+
+Note that this doesn't really tie us to PBS at all, but it does *let* us use pbs if
+we want to, because the N x M structure of the jobs is laid out at the beginning.
+But we don't have to worrry about handling state between the different simulate and
+model rounds by writing out to the filesystem or saving ENV variables, because we
+have this little lightweight ZMQ server who can tell each process what to do, when
+it comes online.
 
 License
 -------
