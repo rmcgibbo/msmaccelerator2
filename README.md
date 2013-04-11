@@ -61,7 +61,7 @@ Communication structure
   between the kernel and the frontends. Eventually, I want to log all of these
   messages to a database like mongodb that plays nice with JSON. The exact
   format of the messages is described in `msmaccelerator/message.py`. For some
-  background, you can also ready the IPython messaging spec [here](http://ipython.org/ipython-doc/dev/development/messaging.html) 
+  background, you can also ready the [IPython messaging specification](http://ipython.org/ipython-doc/dev/development/messaging.html).
 
 
 Execution structure
