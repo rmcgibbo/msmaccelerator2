@@ -1,10 +1,7 @@
 #!/usr/bin/env python
+import re
 from argparse import ArgumentParser
-
-
-def serve(args):
-    from msmaccelerator.server import server
-    server.main(args.zmq_port)
+import msmaccelerator.server.server
     
 def model(args):
     from msmaccelerator.model import clusterer
@@ -15,15 +12,33 @@ def simulate(args):
     simulation.main(args.server_url, args.zmq_port)
 
 
+def mongo_url(url):
+    "validate a mongo url"
+    # i coppied this regular expression from here:
+    # http://thecomputersarewinning.com/post/clojure-heroku-noir-mongo/
+    if re.match("^.*://(.*?):(.*?)@(.*?):(\d+)/(.*)$", url):
+        return url
+    else:
+        raise ValueError()
+
 def main():
     default_port = 12345
     
     parser = ArgumentParser(description="""MSMAccelerator main executable""")
     subparsers = parser.add_subparsers(dest='subparser_name')
 
-    serve_parser = subparsers.add_parser('serve')
+    serve_parser = subparsers.add_parser('serve', description="""
+        Run the msmaccelerator server.""")
     serve_parser.add_argument('--zmq_port', type=int, default=default_port,
-        help='port to serve on. default=%s' % default_port)
+        help='Port to bind to. default=%s' % default_port)
+    serve_parser.add_argument('--collection_suffix', default=None,
+        help='''Suffix to use for the names of the MongoDB collections in which
+                data, currently just the messages, is stored. By default, no
+                suffix is used.''') 
+    serve_parser.add_argument('--mongo_url', default=None,
+        help='''The URL for MongoDB. This can be either passed in or, if not
+                supplied, it will be read from the environment variable
+                MONGO_URL.''', type=mongo_url)
 
     model_parser = subparsers.add_parser('model')
     model_parser.add_argument('--zmq_port', type=int, default=default_port,
@@ -35,13 +50,10 @@ def main():
         help='port to connect to server on. default=%s' % default_port)
     simulate_parser.add_argument('--server_url', default='127.0.0.1')
 
-
-    # doto, validate the url and port
-
     args = parser.parse_args()
 
     commands = {
-        'serve': serve,
+        'serve': msmaccelerator.server.server.main,
         'model': model,
         'simulate': simulate,
     }
