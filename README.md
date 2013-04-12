@@ -2,6 +2,8 @@ MSMAccelerator2
 ===============
 *Next-generation* MSMAccelerator app.
 
+[View a simple run and analysis here](http://nbviewer.ipython.org/urls/raw.github.com/rmcgibbo/msmaccelerator2/2623d76bbbee28d682c72aaa05575ed60b33c865/simple%2520analysis.ipynb)
+
 Design
 ------
 - The app should be able to work on clusters with PBS systems. That means
