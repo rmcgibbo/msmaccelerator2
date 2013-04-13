@@ -12,6 +12,7 @@ replies.
 
 import os
 import glob
+import warnings
 import json
 import zmq
 from zmq.eventloop import ioloop
@@ -102,7 +103,7 @@ class DispatchBase(object):
             mongo_url = os.getenv('MONGO_URL')
 
         if mongo_url is None:
-            raise ValueError('Could not connect to database. You need to '
+            warnings.warn('Could not connect to database. You need to '
                 'add an env variable MONGO_URL with the url for the mongo '
                 'instance. If you\'re running you own mongo server, then '
                 'this will be some kind of localhost url. Its recommended '
@@ -110,6 +111,8 @@ class DispatchBase(object):
                 'MongoHQ or MongoLab. They will give you a url to connect to'
                 'your db. See http://blog.mongohq.com/blog/2012/02/20/connecting-to-mongohq/ '
                 'for some details')
+            self.db = None
+            return
 
         c = Connection(mongo_url)
         if db_name is None:
