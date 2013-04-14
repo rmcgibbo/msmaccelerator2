@@ -1,3 +1,13 @@
+"""
+Base class for devices that connect to the msmaccelerator server that exposes
+them as a configurable command-line app and provides the biolerplate for them
+to get registered with the server and start their work.
+"""
+
+##############################################################################
+# Imports
+##############################################################################
+
 import uuid
 import zmq
 
@@ -5,6 +15,10 @@ from IPython.utils.traitlets import Int, Unicode
 
 from .app import App
 from ..core.message import message
+
+##############################################################################
+# Classes
+##############################################################################
 
 
 class Device(App):
