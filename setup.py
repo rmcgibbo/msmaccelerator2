@@ -100,7 +100,7 @@ def find_packages():
 
 setup_args = {
     'name': 'msmaccelerator',
-    'version': None,
+    'version': VERSION,
     'author': 'Robert McGibbon',
     'license': 'GPLv3',
     'url': 'https://github.com/rmcgibbo/msmaccelerator2',
