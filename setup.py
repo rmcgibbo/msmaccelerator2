@@ -111,7 +111,7 @@ setup_args = {
 
 if 'setuptools' in sys.modules:
     setup_args['zip_safe'] = False
-    setup_args['install_requires'] = ['IPython>=0.12', 'pyzmq>=2.1.11']
+    setup_args['install_requires'] = ['IPython>=0.12', 'pyzmq>=2.1.11', 'pyyaml']
 
 
 setup_args['packages'] = find_packages()

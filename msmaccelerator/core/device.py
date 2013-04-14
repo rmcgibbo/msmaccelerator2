@@ -14,7 +14,7 @@ import zmq
 from IPython.utils.traitlets import Int, Unicode
 
 from .app import App
-from ..core.message import message
+from ..core.message import Message, pack_message
 
 ##############################################################################
 # Classes
@@ -24,18 +24,18 @@ from ..core.message import message
 class Device(App):
     """Base class for MSMAccelerator devices. These are processes that request data
     from the server, and run on a ZMQ REQ port.
-    
+
     Current subclasses include Simulator and Modeler.
-    
+
     When the device boots up, it will send a message to the server with the
     msg_type 'register_{ClassName}', where ClassName is the name of the subclass
     of device that was intantiated. When it receives a return message, that
     the method on_startup_message() will be called.
-    
+
     Note, if you want to interface directly with the ZMQ socket, it's just
     self.socket
     """
-    
+
     name = 'device'
     path = 'msmaccelerator.core.device.Device'
     short_description = 'Base class for MSMAccelerator devices'
@@ -47,33 +47,33 @@ class Device(App):
 
     aliases = dict(zmq_port='Device.zmq_port',
                    zmq_url='Device.zmq_url')
-    
+
     def start(self):
         ctx = zmq.Context()
-        self.socket = ctx.socket(zmq.REQ)
         self.uuid = uuid.uuid4()
+        self.socket = ctx.socket(zmq.DEALER)
+        self.socket.setsockopt(zmq.IDENTITY, str(self.uuid))
         self.socket.connect('tcp://%s:%s' % (self.zmq_url, self.zmq_port))
-        
+
         # send the "here i am message"
-        self.socket.send_json(message(msg_type='register_%s' % self.__class__.__name__,
-                              sender_id=self.uuid,
-                              content={}))
+        self.send_message(msg_type='register_%s' % self.__class__.__name__,
+                          content={})
 
         msg = self.recv_message()
-        self.on_startup_message(msg['header']['msg_type'], msg)
-    
+        self.on_startup_message(msg)
+
     def on_startup_message(self, msg_type, msg):
         """This method is called when the device receives its startup message
         from the server
         """
         raise NotImplementedError('This method should be overriden in a device subclass')
-    
-    def send_message(self, msg_type, content, parent_header=None):
+
+    def send_message(self, msg_type, content):
         """Send a message to the server
         """
-        self.socket.send_json(message(msg_type=msg_type, content=content,
-            parent_header=parent_header, sender_id=self.uuid))
-    
+        self.socket.send_json(pack_message(msg_type=msg_type, content=content,
+                                           sender_id=self.uuid))
+
     def recv_message(self):
         """Receive a message from the server.
 
@@ -81,4 +81,4 @@ class Device(App):
         the serve delivers a message
         """
         msg = self.socket.recv_json()
-        return msg
+        return Message(msg)

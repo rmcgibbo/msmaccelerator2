@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 from IPython.utils.traitlets import Unicode
 
@@ -21,11 +22,11 @@ directory and in $HOME/.msmbuilder.'''
     output_dir = Unicode('.', config=True, help='''Output directory in which
         to save the file msmbuilder_config.py''')
     aliases = dict(output_dir='MKProfile.output_dir')
-    
+
     def start(self):
         import inspect
         from IPython.config.configurable import Configurable
-        
+
         # all lines of the new config file
         lines = ['# Configuration file for msmaccelerator.']
         lines.append('')
@@ -35,14 +36,14 @@ directory and in $HOME/.msmbuilder.'''
         for cls in itersubclasses(Configurable):
             # get every subclass of Configurable that is part of
             # the msmb package (other subclasses are in IPython)
-            pkg =  inspect.getmodule(cls).__package__            
+            pkg = inspect.getmodule(cls).__package__
             if pkg is not None and pkg.startswith('msmaccelerator'):
                 lines.append(cls.class_config_section())
-        
+
         if (self.output_dir != '') and (not os.path.exists(self.output_dir)):
-            self.log.warning('Creating directory: %s', output_dir)
-            os.makedirs(output_dir)
-        
+            self.log.warning('Creating directory: %s', self.output_dir)
+            os.makedirs(self.output_dir)
+
         # note that this needs to be consistent with the filename used for
         # loading the config file, in core.app
         path = os.path.join(self.output_dir, self.config_file_name)
@@ -50,9 +51,9 @@ directory and in $HOME/.msmbuilder.'''
             self.log.error("%s already exists. I don't want to overwrite it, "
                            "so I'm backing off...", path)
             sys.exit(1)
-        
+
         print 'Saving config file to %s' % path
-        
+
         with open(path, 'w') as f:
             print >> f, os.linesep.join(lines)
 
@@ -71,7 +72,7 @@ def itersubclasses(cls, _seen=None):
     >>> class C(A): pass
     >>> class D(B,C): pass
     >>> class E(D): pass
-    >>> 
+    >>>
     >>> for cls in itersubclasses(A):
     ...     print(cls.__name__)
     B
@@ -86,10 +87,11 @@ def itersubclasses(cls, _seen=None):
     if not isinstance(cls, type):
         raise TypeError('itersubclasses must be called with '
                         'new-style classes, not %.100r' % cls)
-    if _seen is None: _seen = set()
+    if _seen is None:
+        _seen = set()
     try:
         subs = cls.__subclasses__()
-    except TypeError: # fails only when cls is type
+    except TypeError:  # fails only when cls is type
         subs = cls.__subclasses__(cls)
     for sub in subs:
         if sub not in _seen:

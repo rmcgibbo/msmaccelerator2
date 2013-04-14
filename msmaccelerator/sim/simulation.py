@@ -28,17 +28,17 @@ class Simulator(Device):
         request the initial conditions with which to start a simulation, and
         propagate dynamics'''
 
-    def on_startup_message(self, msg_type, msg):
+    def on_startup_message(self, msg):
         """This method is called when the device receives its startup message
         from the server.
         """
-        return getattr(self, msg_type)(**msg)
+        return getattr(self, msg.header.msg_type)(msg.header, msg.content)
 
-    def simulate(self, header, parent_header, content):
-        starting_structure = content['starting_structure']
-        steps = content['steps']
-        box_size = content['box_size']
-        outdir = content['outdir']
+    def simulate(self, header, content):
+        starting_structure = content.starting_structure
+        steps = content.steps
+        box_size = content.box_size
+        outdir = content.outdir
 
         print 'Simulation: Let\'s do this!'
 
@@ -63,4 +63,4 @@ class Simulator(Device):
         self.send_message(msg_type='similation_status', content={
             'status': 'done',
             'traj_fn': outfn,
-        }, parent_header=header)
+        })

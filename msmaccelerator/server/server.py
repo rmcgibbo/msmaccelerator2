@@ -13,7 +13,7 @@ replies.
 import os
 import glob
 import warnings
-import json
+import yaml
 import zmq
 import uuid
 from zmq.eventloop import ioloop
@@ -22,7 +22,7 @@ import numpy as np
 
 # local
 from ..core.app import App
-from ..core.message import message
+from ..core.message import Message, pack_message
 
 # ipython
 from IPython.utils.traitlets import Unicode, Int, Bool
@@ -68,12 +68,12 @@ class ServerBase(App):
     def start(self):
         url = 'tcp://*:%s' % int(self.zmq_port)
 
-        self.uuid = uuid.uuid4()
+        self.uuid = str(uuid.uuid4())
         self.ctx = zmq.Context()
-        s = self.ctx.socket(zmq.REP)
+        s = self.ctx.socket(zmq.ROUTER)
         s.bind(url)
         self._stream = ZMQStream(s)
-        self._stream.on_recv_stream(self._dispatch)
+        self._stream.on_recv(self._dispatch)
 
         self.db = None
         if self.use_db:
@@ -122,30 +122,32 @@ class ServerBase(App):
         self.c_msgs = getattr(self.db, 'messages' + self.collection_suffix)
 
 
-    def send_message(self, msg_type, content, parent_header=None):
-        """Send a message out on the stream
+    def send_message(self, client_id, msg_type, content):
+        """Send a message out to a client
 
         Parameters
         ----------
+        client_id : uuid
+            Who do you want to send the message to?
         msg_type : str
             The type of the message
         content : dict
             Content of the message
-        parent_header : dict, optional
-            In a chain of messages, the header from the parent is copied so
-            that clients can track where messages come from.
-
         Notes
         -----
         For details on the messaging protocol, refer to message.py
         """
-        msg = message(msg_type, self.uuid, content, parent_header=parent_header)
+        msg = pack_message(msg_type, self.uuid, content)
         print 'SENDING', msg
         if self.db is not None:
-            self.c_msgs.save(msg.copy())
+            db_entry = msg.copy()
+            db_entry['client_id'] = client_id
+            self.c_msgs.save(db_entry)
+
+        self._stream.send(client_id, zmq.SNDMORE)
         self._stream.send_json(msg)
 
-    def _dispatch(self, stream, messages):
+    def _dispatch(self, frames):
         """Callback that responds to new messages on the stream
 
         This is the first point where new messages enter the system. Here,
@@ -159,37 +161,18 @@ class ServerBase(App):
         messages : list
             A list of messages that have arrived
         """
-        for raw_msg in messages:
-            msg = json.loads(raw_msg)
-            print 'RECEIVING', msg
-            if self.db is not None:
-                self.c_msgs.save(msg.copy())
-            self._validate_msg(msg)
-            # _validate_msg checks to ensure this lookup succeeds
-            responder = getattr(self, msg['header']['msg_type'])
+        client, raw_msg = frames
+        # using the PyYaml loader is a hack force regular strings
+        # instead of unicode, since you can't send unicode over zmq
+        # since json is a subset of yaml, this works
+        msg = Message(yaml.load(raw_msg))
+        print 'RECEIVING', msg
 
-            responder(**msg)
+        if self.db is not None:
+            self.c_msgs.save(msg.copy())
 
-    def _validate_msg(self, msg):
-        """Validate an incomming message
-
-        Parameters
-        ----------
-        msg : dict
-            The message dict
-        """
-        correct_keys = ['content', 'header', 'parent_header']
-        if not (sorted(msg.keys()) == correct_keys):
-            err = 'Keys ({}) in message are not correct. They should be {}'
-            raise ValueError(err.format(msg.keys(), correct_keys))
-
-        if not 'msg_type' in msg['header']:
-            err = 'header must contain "msg_type". you gave {}'
-            raise ValueError(err.format(msg))
-
-        if not hasattr(self, msg['header']['msg_type']):
-            err = 'I dont have a method to respond to msg_type={}'
-            raise ValueError(err.format(msg['header']['msg_type']))
+        responder = getattr(self, msg.header.msg_type)
+        responder(msg.header, msg.content)
 
 
 class ToyMaster(ServerBase):
@@ -257,42 +240,38 @@ class ToyMaster(ServerBase):
     # BEGIN HANDLERS FOR INCOMMING MESSAGES
     ########################################################################
 
-    def register_Simulator(self, header, parent_header, content):
+    def register_Simulator(self, header, content):
         """Called at the when a Simulator device boots up. We give it
         starting conditions
         """
-        self.send_message('simulate', content={
+        self.send_message(header.sender_id, 'simulate', content={
             'starting_structure': self.select_structure(),
             'steps': self.steps,
             'box_size': self.box_size,
             'outdir': self.traj_outdir,
             'round': self.round,
-        }, parent_header=header)
+        })
 
-    def register_Modeler(self, header, parent_header, content):
+    def register_Modeler(self, header, content):
         """Called when a Modeler device boots up, asking for a path to data.
         """
-        self.send_message('cluster', content={
+        self.send_message(header.sender_id, 'cluster', content={
             'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.npy')),
             'outdir': self.models_outdir,
-        }, parent_header=header)
+        })
 
-    def similation_status(self, header, parent_header, content):
+    def similation_status(self, header, content):
         """Called at the end of a simulation job, saying that its finished
         """
-        self.send_message('acknowledge_receipt', content={},
-                          parent_header=header)
+        pass
 
-    def cluster_status(self, header, parent_header, content):
+    def cluster_status(self, header, content):
         """Called when a clustering job finishes, """
-        if content['status'] == 'done':
-            model = np.load(content['model_fn'])
+        if content.status == 'done':
+            model = np.load(content.model_fn)
             self.round += 1
             self.structures = model['centers']
             self.weights = model['populations']
-
-        self.send_message('acknowledge_receipt', content={},
-                          parent_header=header)
 
     ########################################################################
     # END HANDLERS FOR INCOMMING MESSAGES

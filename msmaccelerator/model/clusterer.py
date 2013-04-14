@@ -28,16 +28,16 @@ class Modeler(Device):
         request the currently available data and build an MSM. That MSM will be
         used by the server to drive future rounds of adaptive sampling'''
 
-    def on_startup_message(self, msg_type, msg):
+    def on_startup_message(self, msg):
         """This method is called when the device receives its startup message
         from the server
         """
-        return getattr(self, msg_type)(**msg)
+        return getattr(self, msg.header.msg_type)(msg.header, msg.content)
 
-    def cluster(self, header, parent_header, content):
-        outdir = content['outdir']
+    def cluster(self, header, content):
+        outdir = content.outdir
         # load all of the trajectories
-        trajs = [np.load(fn) for fn in content['traj_fns']]
+        trajs = [np.load(fn) for fn in content.traj_fns]
 
         # concatenate them together
         data = np.asarray(np.concatenate(trajs), dtype=int)
@@ -84,4 +84,4 @@ class Modeler(Device):
         self.send_message(msg_type='cluster_status', content={
             'status': 'done',
             'model_fn': outfn,
-        }, parent_header=header)
+        })

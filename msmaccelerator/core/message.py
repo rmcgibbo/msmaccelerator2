@@ -14,10 +14,6 @@ The general format is
                 'msg_type' : str,
      },
 
-  # In a chain of messages, the header from the parent is copied so that
-  # clients can track where messages come from.
-  'parent_header' : dict,
-
   # The actual content of the message must be a dict, whose structure
   # depends on the message type.
   'content' : dict,
@@ -33,15 +29,16 @@ supply?
 # Imports
 ##############################################################################
 
-import uuid
 import time
+import uuid
+import pprint
 
 #############################################################################
 # Functions
 ##############################################################################
 
 
-def message(msg_type, sender_id, content, parent_header=None):
+def pack_message(msg_type, sender_id, content):
     """Construct a message dict
 
     Parameters
@@ -53,28 +50,70 @@ def message(msg_type, sender_id, content, parent_header=None):
     content : dict
         Any content of the message. The semantics of the content dict
         are specific to different message types
-    parent_header : dict
-        The header from a previous message, so that we can chain them
-
-
-
     """
     # do some typechecking on the keys
-    if not isinstance(msg_type, basestring):
+    if not isinstance(msg_type, str):
         raise ValueError('msg_type must be string')
     if not isinstance(content, dict):
         raise ValueError('content must be dict')
 
-    if parent_header is None:
-        parent_header = {}
-
-    return {
+    return squash_unicode({
         'header': {
             'sender_id': str(sender_id),
             'msg_id': str(uuid.uuid4()),
             'msg_type': msg_type,
             'time': time.time()
         },
-        'parent_header': parent_header,
         'content': content
-    }
+    })
+
+
+##############################################################################
+# The following code is copied from IPython
+# https://github.com/ipython/ipython/blob/master/IPython/kernel/zmq/session.py
+##############################################################################
+
+
+class Message(object):
+    """A simple message object that maps dict keys to attributes.
+
+    A Message can be created from a dict and a dict from a Message instance
+    simply by calling dict(msg_obj)."""
+
+    def __init__(self, msg_dict):
+        dct = self.__dict__
+        for k, v in dict(msg_dict).iteritems():
+            if isinstance(v, dict):
+                v = Message(v)
+            dct[k] = v
+
+    # Having this iterator lets dict(msg_obj) work out of the box.
+    def __iter__(self):
+        return iter(self.__dict__.iteritems())
+
+    def __repr__(self):
+        return repr(self.__dict__)
+
+    def __str__(self):
+        return pprint.pformat(self.__dict__)
+
+    def __contains__(self, k):
+        return k in self.__dict__
+
+    def __getitem__(self, k):
+        return self.__dict__[k]
+
+
+def squash_unicode(obj):
+    """coerce unicode back to bytestrings."""
+    if isinstance(obj, dict):
+        for key in obj.keys():
+            obj[key] = squash_unicode(obj[key])
+            if isinstance(key, unicode):
+                obj[squash_unicode(key)] = obj.pop(key)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            obj[i] = squash_unicode(v)
+    elif isinstance(obj, unicode):
+        obj = obj.encode('utf8')
+    return obj
