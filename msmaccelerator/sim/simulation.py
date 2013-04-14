@@ -16,40 +16,26 @@ import numpy as np
 from IPython.utils.traitlets import Unicode, Int
 
 # local
-from ..core.app import App
+from ..core.device import Device
 from ..core.message import message
 
 #############################################################################
 # Handlers
 ##############################################################################
 
-class Simulator(App):
+class Simulator(Device):
     name = 'simulate'
     path = 'msmaccelerator.sim.simulation.Simulator'
     short_description = 'Run a single round of dynamics'
     long_description = '''This device will connect to the msmaccelerator server,
         request the initial conditions with which to start a simulation, and
         propagate dynamics'''
-    
-    zmq_port = Int(12345, config=True, help='ZeroMQ port to connect to the server on')
-    zmq_url = Unicode('127.0.0.1', config=True, help='URL to connect to server with')
 
-    aliases = dict(zmq_port='Simulator.zmq_port',
-                   zmq_url='Simulator.zmq_url')
-
-    def start(self):
-        ctx = zmq.Context()
-        self.sock = ctx.socket(zmq.REQ)
-        self.uuid = uuid.uuid4()
-        self.sock.connect('tcp://%s:%s' % (self.zmq_url, self.zmq_port))
-        
-        # send the "here i am message"
-        self.sock.send_json(message(msg_type='register_simulator',
-                              sender_id=self.uuid,
-                              content={}))
-
-        msg = self.sock.recv_json()
-        getattr(self, msg['header']['msg_type'])(**msg)    
+    def on_startup_message(self, msg_type, msg):
+        """This method is called when the device receives its startup message
+        from the server.
+        """
+        return getattr(self, msg_type)(**msg)  
     
     def simulate(self, header, parent_header, content):
         starting_structure = content['starting_structure']
@@ -77,7 +63,7 @@ class Simulator(App):
         np.save(outfn, trajectory)
 
         # tell the master that I'm done
-        self.sock.send_json(message(msg_type='similation_status', content={
+        self.send_message(msg_type='similation_status', content={
             'status': 'done',
             'traj_fn': outfn,
-        }, parent_header=header, sender_id=self.uuid))
+        }, parent_header=header)

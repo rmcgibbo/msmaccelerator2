@@ -257,8 +257,9 @@ class ToyMaster(ServerBase):
     # BEGIN HANDLERS FOR INCOMMING MESSAGES
     ########################################################################
 
-    def register_simulator(self, header, parent_header, content):
-        """Called at the begining of a simulation job, requesting data
+    def register_Simulator(self, header, parent_header, content):
+        """Called at the when a Simulator device boots up. We give it
+        starting conditions
         """
         self.send_message('simulate', content={
             'starting_structure': self.select_structure(),
@@ -268,20 +269,19 @@ class ToyMaster(ServerBase):
             'round': self.round,
         }, parent_header=header)
 
-    def similation_status(self, header, parent_header, content):
-        """Called at the end of a simulation job, saying that its finished
-        """
-        self.send_message('acknowledge_receipt', content={},
-                          parent_header=header)
-
-    def register_clusterer(self, header, parent_header, content):
-        """Called when a clustering job starts up, asking for the path to
-        data
+    def register_Modeler(self, header, parent_header, content):
+        """Called when a Modeler device boots up, asking for a path to data.
         """
         self.send_message('cluster', content={
             'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.npy')),
             'outdir': self.models_outdir,
         }, parent_header=header)
+
+    def similation_status(self, header, parent_header, content):
+        """Called at the end of a simulation job, saying that its finished
+        """
+        self.send_message('acknowledge_receipt', content={},
+                          parent_header=header)
 
     def cluster_status(self, header, parent_header, content):
         """Called when a clustering job finishes, """

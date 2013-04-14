@@ -14,7 +14,7 @@ from scipy.cluster.hierarchy import fclusterdata
 from msmbuilder.MSMLib import get_count_matrix_from_assignments, build_msm
 
 # local
-from ..core.app import App
+from ..core.device import Device
 from ..core.message import message
 
 from IPython.utils.traitlets import Unicode, Int
@@ -24,33 +24,20 @@ from IPython.utils.traitlets import Unicode, Int
 ##############################################################################
 
 
-class Modeler(App):
+class Modeler(Device):
     name = 'model'
     path = 'msmaccelerator.model.clusterer.Modeler'
     short_description = 'Run the modeler, building an MSM on the available data'
     long_description = '''This device will connect to the msmaccelerator server,
         request the currently available data and build an MSM. That MSM will be
         used by the server to drive future rounds of adaptive sampling'''
+
+    def on_startup_message(self, msg_type, msg):
+        """This method is called when the device receives its startup message
+        from the server
+        """
+        return getattr(self, msg_type)(**msg)
     
-    zmq_port = Int(12345, config=True, help='ZeroMQ port to connect to the server on')
-    zmq_url = Unicode('127.0.0.1', config=True, help='URL to connect to server with')
-
-    aliases = dict(zmq_port='Modeler.zmq_port',
-                   zmq_url='Modeler.zmq_url')
-
-    def start(self):
-        ctx = zmq.Context()
-        self.sock = ctx.socket(zmq.REQ)
-        self.uuid = uuid.uuid4()
-        self.sock.connect('tcp://%s:%s' % (self.zmq_url, self.zmq_port))
-        
-        # send the "here i am message"
-        self.sock.send_json(message(msg_type='register_clusterer',
-                                    sender_id=self.uuid, content={}))
-
-        msg = self.sock.recv_json()
-        getattr(self, msg['header']['msg_type'])(**msg)
-        
     def cluster(self, header, parent_header, content):
         outdir = content['outdir']
         # load all of the trajectories
@@ -98,7 +85,7 @@ class Modeler(App):
                  trajs=content['traj_fns'],
                  centers=centers)
 
-        self.sock.send_json(message(msg_type='cluster_status', content={
+        self.send_message(msg_type='cluster_status', content={
             'status': 'done',
             'model_fn': outfn,
-        }, parent_header=header, sender_id=self.uuid))
+        }, parent_header=header)
