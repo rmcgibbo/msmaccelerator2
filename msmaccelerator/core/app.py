@@ -9,9 +9,18 @@ import os
 
 # ipython imports
 from IPython.config.application import Application
-from IPython.utils.traitlets import Bool
-from IPython.utils.text import indent, dedent, wrap_paragraphs, marquee
+from IPython.utils.text import indent, dedent, wrap_paragraphs
 from IPython.config.loader import ConfigFileNotFound
+
+#-----------------------------------------------------------------------------
+# Globals
+#-----------------------------------------------------------------------------
+
+# there's probably a better way to do this, but I was having a little problem
+# where the message "no config file found" was being printed twice, both
+# by the RootApplication and by the subcommand, so I just put in a check to
+# this global, so that it's only printed once
+_printed_config_file_warning = False
 
 #-----------------------------------------------------------------------------
 # Classes
@@ -38,9 +47,6 @@ class App(Application):
     config_file_name = 'msmaccelerator_config.py'
     option_description = u''
 
-    # display_banner = Bool(True, config=True,
-    #     help="Whether to display a banner upon starting MSMBuilder.")
-
     def print_description(self):
         "Print the application description"
         lines = []
@@ -65,9 +71,13 @@ class App(Application):
             super(App, self).load_config_file(self.config_file_name,
                                                         config_file_paths())
             self.log.info('Config file loaded.')
+
         except ConfigFileNotFound:
-            self.log.warning('No config file was found. I searched in %s' %
-                ', '.join(config_file_paths()))
+            global _printed_config_file_warning
+            if _printed_config_file_warning is False:
+                _printed_config_file_warning = True
+                self.log.warning('No config file was found. I searched in %s' %
+                    ', '.join(config_file_paths()))
 
     def print_subcommands(self):
         """Print the list of subcommands under this application"""
@@ -97,17 +107,16 @@ class App(Application):
 
 
 class RootApplication(App):
-    name = 'msmb'
-    path = 'base.RootApplication'
+    name = 'accelerator'
+    path = 'msmaccelerator.core.app.RootApplication'
     short_description = ('MSMAccelerator: Adaptive Sampling Molecular Dynamics '
                          'with Markov State Models')
-    long_description = """MSMAccelerator is an adaptive sampling
-    """
+    long_description = """MSMAccelerator is an adaptive sampling"""
     citation_string = 'If you use this sofware in a publication, please cite our papers :)'
-    
+
     def __init__(self, *args, **kwargs):
-         self.subcommands = {}
-         super(RootApplication, self).__init__(*args, **kwargs)
+        self.subcommands = {}
+        super(RootApplication, self).__init__(*args, **kwargs)
 
     def start(self):
         """Start the application's main loop.
@@ -119,7 +128,6 @@ class RootApplication(App):
             # if they don't choose a subcommand, display the help message
             self.parse_command_line('-help')
 
-         
     def initialize(self, argv=None):
         super(RootApplication, self).initialize(argv)
         print(self.citation_string)
@@ -131,6 +139,11 @@ class RootApplication(App):
                        ' it in your new subclass' % app.name)
                 raise ConfigurationError(msg)
             self.subcommands[app.name] = (app.path, app.short_description)
+
+
+#-----------------------------------------------------------------------------
+# Utility functions
+#-----------------------------------------------------------------------------
 
 
 def config_file_paths():
