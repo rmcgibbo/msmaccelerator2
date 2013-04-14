@@ -15,12 +15,17 @@ import glob
 import warnings
 import json
 import zmq
+import uuid
 from zmq.eventloop import ioloop
 from zmq.eventloop.zmqstream import ZMQStream
 import numpy as np
 
 # local
+from ..core.app import App
 from ..core.message import message
+
+# ipython
+from IPython.utils.traitlets import Unicode, Int, Bool
 
 
 ##############################################################################
@@ -28,7 +33,7 @@ from ..core.message import message
 ##############################################################################
 
 
-class DispatchBase(object):
+class ServerBase(App):
     """Base class for a ZMQ "dispatch" object that manages a REP socket.
 
     When a new message arrives on the socket, ZMQ cals the dispatch()
@@ -39,50 +44,42 @@ class DispatchBase(object):
 
     The method should respond on the stream by calling send_message()
     """
-    ctx = zmq.Context()
+    
+    zmq_port = Int(12345, config=True, help='ZeroMQ port to serve on')
+    mongo_url = Unicode('', config=True, help='''
+        The url for mongodb. This can be either passed in or, if not
+        supplied, it will be read from the environment variable
+        MONGO_URL. It should be a string like:
+            mongodb://<user>:<pass>@hatch.mongohq.com:10034/msmaccelerator
+        ''')
+    use_db = Bool(True, config=True, help='''
+        Do you want to connect to a database to log the messages?''')
+    db_name = Unicode('', config=True, help='''
+        The name of the database to log to. If not supplied, its infered
+        by chopping off the last bit of the mongo_url string, after the
+        last "/". In the example above, that would be 'msmaccelerator''')
+    collection_suffix = Unicode('', config=True, help='''
+        We're going to log messages into the database under the 'messages'
+        collection, but if you want not to get messages from one run
+        of msmaccelerator confused with another run, supply this
+        'message_suffix' string, and then we'll use a collection
+        like "messages-{}".format(messasges_suffix)''')
 
-    def __init__(self, ctx, url, use_db=True, mongo_url=None, db_name=None,
-                 collection_suffix=None):
-        """Initiaize the base class.
+    def start(self):
+        url = 'tcp://*:%s' % int(self.zmq_port)
 
-        This sets up the sockets and stuff
-
-        Parameters
-        ----------
-        ctx : zmq.Context
-            A ZeroMQ context object that's used to create the new socket.
-        url : string
-            The zmq url that we should listen on. This should be fully
-            qualified, like tcp://127.0.0.1:12345 or something
-        use_db : bool
-            Do you want to connect to a database to log the messages?
-        mongo_url : string, optional
-            The url for mongodb. This can be either passed in or, if not
-            supplied, it will be read from the environment variable
-            MONGO_URL. It should be a string like:
-                mongodb://<user>:<pass>@hatch.mongohq.com:10034/msmaccelerator
-        db_name : string, optional
-            The name of the database to log to. If not supplied, its infered
-            by chopping off the last bit of the mongo_url string, after the
-            last "/". In the example above, that would be 'msmaccelerator'
-        collection_suffix : string, optional
-            We're going to log messages into the database under the 'messages'
-            collection, but if you want not to get messages from one run
-            of msmaccelerator confused with another run, supply this
-            'message_suffix' string, and then we'll use a collection
-            like "messages-{}".format(messasges_suffix)
-        """
-        s = ctx.socket(zmq.REP)
+        self.uuid = uuid.uuid4()
+        self.ctx = zmq.Context()
+        s = self.ctx.socket(zmq.REP)
         s.bind(url)
         self._stream = ZMQStream(s)
         self._stream.on_recv_stream(self._dispatch)
 
-        self.collection_suffix = collection_suffix
         self.db = None
-        if use_db:
-            self._initialize_database(mongo_url, db_name)
+        if self.use_db:
+            self._start_database()
 
-    def _initialize_database(self, mongo_url=None, db_name=None):
+    def _start_database(self):
         """Sets the attribute self.db, self.c_msgs
         """
 
@@ -99,10 +96,10 @@ class DispatchBase(object):
             print '#'*80
             raise
 
-        if mongo_url is None:
-            mongo_url = os.getenv('MONGO_URL')
+        if self.mongo_url == '':
+            self.mongo_url = os.environ.get('MONGO_URL', '')
 
-        if mongo_url is None:
+        if self.mongo_url == '':
             warnings.warn('Could not connect to database. You need to '
                 'add an env variable MONGO_URL with the url for the mongo '
                 'instance. If you\'re running you own mongo server, then '
@@ -114,18 +111,15 @@ class DispatchBase(object):
             self.db = None
             return
 
-        c = Connection(mongo_url)
-        if db_name is None:
+        c = Connection(self.mongo_url)
+        if self.db_name == '':
             # this gets the name of the db from the mongo url
             # we should do more validation here
-            db_name = mongo_url.split('/')[-1]
-            print 'PARSED DB NAME:', db_name
+            self.db_name = self.mongo_url.split('/')[-1]
+            print 'PARSED DB NAME:', self.db_name
 
-        self.db = getattr(c, db_name)  # database name
-        if self.collection_suffix is None:
-            self.c_msgs = getattr(self.db, 'messages')
-        else:
-            self.c_msgs = getattr(self.db, 'messages' + self.collection_suffix)
+        self.db = getattr(c, self.db_name)  # database name
+        self.c_msgs = getattr(self.db, 'messages' + self.collection_suffix)
 
 
     def send_message(self, msg_type, content, parent_header=None):
@@ -145,7 +139,7 @@ class DispatchBase(object):
         -----
         For details on the messaging protocol, refer to message.py
         """
-        msg = message(msg_type, content, parent_header=parent_header)
+        msg = message(msg_type, self.uuid, content, parent_header=parent_header)
         print 'SENDING', msg
         if self.db is not None:
             self.c_msgs.save(msg.copy())
@@ -198,17 +192,32 @@ class DispatchBase(object):
             raise ValueError(err.format(msg['header']['msg_type']))
 
 
-class ToyMaster(DispatchBase):
-
+class ToyMaster(ServerBase):
+    
+    name = 'serve'
+    path = 'msmaccelerator.server.server.ToyMaster'
+    short_description = 'Start up the MSMAccelerator work server'
+    long_description = """This lightweight server manages the adaptive sampling
+    workflow. Simulator and modeler processes connect to it, and receive either
+    initial conditions to propagate (the simulators) or data with which to build
+    an MSM.
+    """
     # how long do we want trajectories to be?
-    steps = 100
+    steps = Int(100, config=True, help='How many steps of MD to run on each simulator')
 
     # size of the grid we're simulating dynamics on
-    box_size = 10
+    box_size = Int(10, config=True, help='Size of the box to run MD on')
+    
+    
+    aliases = dict(steps='ToyMaster.steps',
+                   use_db='ToyMaster.use_db',
+                   zmq_port='ServerBase.zmq_port',
+                   collection_suffix='ServerBase.collection_suffix',
+                   mongo_url='ServerBase.mongo_url')
 
-    def __init__(self, **kwargs):
-        super(ToyMaster, self).__init__(**kwargs)
-
+    def start(self):
+        super(ToyMaster, self).start()
+        
         self.structures = None
         self.weights = None
         self.initialize_structures()
@@ -221,6 +230,9 @@ class ToyMaster(DispatchBase):
         for path in [self.traj_outdir, self.models_outdir]:
             if not os.path.exists(path):
                 os.makedirs(path)
+
+        ioloop.install()
+        ioloop.IOLoop.instance().start()
 
     def initialize_structures(self):
         """Create some random initial structures"""
@@ -285,18 +297,3 @@ class ToyMaster(DispatchBase):
     ########################################################################
     # END HANDLERS FOR INCOMMING MESSAGES
     ########################################################################
-
-
-def main(args):
-    # install the tornado event loop. this needs to be done first
-    ioloop.install()
-    ctx = zmq.Context()
-
-    url = 'tcp://*:%s' % int(args.zmq_port)
-    dispatch = ToyMaster(ctx=ctx, url=url, mongo_url=args.mongo_url,
-                         collection_suffix=args.collection_suffix)
-
-    ioloop.IOLoop.instance().start()
-
-if __name__ == '__main__':
-    main()

@@ -9,6 +9,7 @@ The general format is
 {
   'header' : {
                 'msg_id' : uuid,
+                'sender_id' : uuid,
                 # All recognized message type strings are listed below.
                 'msg_type' : str,
      },
@@ -40,13 +41,15 @@ import time
 ##############################################################################
 
 
-def message(msg_type, content, parent_header=None):
+def message(msg_type, sender_id, content, parent_header=None):
     """Construct a message dict
 
     Parameters
     ----------
     msg_type : str
         The type of the message
+    sender_id : uuid
+        A unique identifier that identifies the sender process.
     content : dict
         Any content of the message. The semantics of the content dict
         are specific to different message types
@@ -67,6 +70,7 @@ def message(msg_type, content, parent_header=None):
 
     return {
         'header': {
+            'sender_id': str(sender_id),
             'msg_id': str(uuid.uuid4()),
             'msg_type': msg_type,
             'time': time.time()
