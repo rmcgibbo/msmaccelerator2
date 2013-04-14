@@ -6,16 +6,12 @@ Simple clustering process. Builds an MSM and saves it to disk.
 ##############################################################################
 
 import os
-import zmq
-import uuid
 import numpy as np
 
-from scipy.cluster.hierarchy import fclusterdata
 from msmbuilder.MSMLib import get_count_matrix_from_assignments, build_msm
 
 # local
 from ..core.device import Device
-from ..core.message import message
 
 from IPython.utils.traitlets import Unicode, Int
 
@@ -37,7 +33,7 @@ class Modeler(Device):
         from the server
         """
         return getattr(self, msg_type)(**msg)
-    
+
     def cluster(self, header, parent_header, content):
         outdir = content['outdir']
         # load all of the trajectories

@@ -44,7 +44,7 @@ class ServerBase(App):
 
     The method should respond on the stream by calling send_message()
     """
-    
+
     zmq_port = Int(12345, config=True, help='ZeroMQ port to serve on')
     mongo_url = Unicode('', config=True, help='''
         The url for mongodb. This can be either passed in or, if not
@@ -193,7 +193,7 @@ class ServerBase(App):
 
 
 class ToyMaster(ServerBase):
-    
+
     name = 'serve'
     path = 'msmaccelerator.server.server.ToyMaster'
     short_description = 'Start up the MSMAccelerator work server'
@@ -207,8 +207,8 @@ class ToyMaster(ServerBase):
 
     # size of the grid we're simulating dynamics on
     box_size = Int(10, config=True, help='Size of the box to run MD on')
-    
-    
+
+
     aliases = dict(steps='ToyMaster.steps',
                    use_db='ToyMaster.use_db',
                    zmq_port='ServerBase.zmq_port',
@@ -217,7 +217,7 @@ class ToyMaster(ServerBase):
 
     def start(self):
         super(ToyMaster, self).start()
-        
+
         self.structures = None
         self.weights = None
         self.initialize_structures()

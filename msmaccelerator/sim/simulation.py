@@ -1,15 +1,12 @@
 """
 Simple simulation process. Two dimensional dynamics on a lattice.
 
-
 """
 #############################################################################
 # Imports
 ##############################################################################
 
 import os
-import zmq
-import uuid
 import time
 import numpy as np
 
@@ -17,11 +14,11 @@ from IPython.utils.traitlets import Unicode, Int
 
 # local
 from ..core.device import Device
-from ..core.message import message
 
 #############################################################################
 # Handlers
 ##############################################################################
+
 
 class Simulator(Device):
     name = 'simulate'
@@ -35,8 +32,8 @@ class Simulator(Device):
         """This method is called when the device receives its startup message
         from the server.
         """
-        return getattr(self, msg_type)(**msg)  
-    
+        return getattr(self, msg_type)(**msg)
+
     def simulate(self, header, parent_header, content):
         starting_structure = content['starting_structure']
         steps = content['steps']
