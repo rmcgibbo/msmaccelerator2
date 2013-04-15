@@ -16,6 +16,7 @@ import warnings
 import yaml
 import zmq
 import uuid
+import cPickle as pickle
 from zmq.eventloop import ioloop
 ioloop.install()  # this needs to come at the beginning
 from zmq.eventloop.zmqstream import ZMQStream
@@ -24,9 +25,13 @@ import numpy as np
 # local
 from ..core.app import App
 from ..core.message import Message, pack_message
+from .openmm import OpenMMStateBuilder
+
+
+from simtk.openmm.app import PDBFile
 
 # ipython
-from IPython.utils.traitlets import Unicode, Int, Bool
+from IPython.utils.traitlets import Unicode, Int, Bool, Instance
 
 
 ##############################################################################
@@ -192,55 +197,36 @@ class ToyMaster(ServerBase):
     initial conditions to propagate (the simulators) or data with which to build
     an MSM.
     """
-    # how long do we want trajectories to be?
-    steps = Int(100, config=True, help='How many steps of MD to run on each simulator')
+    
+    system_xml = Unicode('system.xml', config=True, help='''
+        Path to the XML file containing the OpenMM system to propagate''')
+    system = Instance('simtk.openmm.openmm.System')
+    
+    traj_outdir = Unicode('trajs/', help='Path where output trajectories will be stored')
+    models_outdir = Unicode('models/', help='Path where MSMs will be saved')
+    starting_states_outdir = Unicode('starting_states', help='Path where starting structures will be stored')
+    
+    statebuilder = Instance('msmaccelerator.server.openmm.OpenMMStateBuilder')
+    initial_pdb = Unicode('ala5.pdb', help='Initial structure. we need to generalize this...')
 
-    # size of the grid we're simulating dynamics on
-    box_size = Int(10, config=True, help='Size of the box to run MD on')
-
-
-    aliases = dict(steps='ToyMaster.steps',
-                   use_db='ToyMaster.use_db',
+    aliases = dict(use_db='ToyMaster.use_db',
                    zmq_port='ServerBase.zmq_port',
                    collection_suffix='ServerBase.collection_suffix',
                    mongo_url='ServerBase.mongo_url')
 
     def start(self):
         super(ToyMaster, self).start()
-
-        self.structures = None
-        self.weights = None
-        self.initialize_structures()
-
-        self.round = 0
-        self.traj_outdir = os.path.join(os.path.abspath(os.curdir), 'trajs')
-        self.models_outdir = os.path.join(os.path.abspath(os.curdir), 'models')
-
+        
+        # instantiate the machinery for building serialized openmm states
+        self.statebuilder = OpenMMStateBuilder(self.system_xml)
+        self.initial_structure = PDBFile(self.initial_pdb)
+        
         # create paths if need be
-        for path in [self.traj_outdir, self.models_outdir]:
+        for path in [self.traj_outdir, self.models_outdir, self.starting_states_outdir]:
             if not os.path.exists(path):
                 os.makedirs(path)
 
         ioloop.IOLoop.instance().start()
-
-    def initialize_structures(self):
-        """Create some random initial structures"""
-        n_init_structures = 10
-
-        # choose random coordinates from inside the box
-        self.structures = 1.0*np.random.randint(self.box_size,
-                                                size=(n_init_structures, 2))
-        # uniform weights
-        self.weights = np.ones(n_init_structures) / n_init_structures
-
-    def select_structure(self):
-        """Select a random structure
-
-        The selection is done from self.structures() via the multinomial
-        distibution in self.weights
-        """
-        l = np.where(np.random.multinomial(1, self.weights) == 1)[0][0]
-        return [float(e) for e in self.structures[l]]
 
     ########################################################################
     # BEGIN HANDLERS FOR INCOMMING MESSAGES
@@ -250,12 +236,23 @@ class ToyMaster(ServerBase):
         """Called at the when a Simulator device boots up. We give it
         starting conditions
         """
+        
+        starting_state_fn = os.path.join(self.starting_states_outdir,
+                                         '%s.xml' % header.sender_id)
+        with open(starting_state_fn, 'w') as f:
+            state = self.statebuilder.build(self.initial_structure.getPositions(asNumpy=True))
+            f.write(state)
+        
         self.send_message(header.sender_id, 'simulate', content={
-            'starting_structure': self.select_structure(),
-            'steps': self.steps,
-            'box_size': self.box_size,
-            'outdir': self.traj_outdir,
-            'round': self.round,
+            'starting_state': {
+                'protocol': 'localfs',
+                'path': os.path.abspath(starting_state_fn)
+            },
+            'topology_pdb' : {
+                'protocol': 'localfs',
+                'path': self.initial_pdb,
+            },
+            'outdir': os.path.abspath(self.traj_outdir),
         })
 
     def register_Modeler(self, header, content):
@@ -263,21 +260,22 @@ class ToyMaster(ServerBase):
         """
         self.send_message(header.sender_id, 'cluster', content={
             'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.npy')),
-            'outdir': self.models_outdir,
+            'outdir': os.path.abspath(self.models_outdir),
         })
 
-    def similation_status(self, header, content):
-        """Called at the end of a simulation job, saying that its finished
+    def simulation_status(self, header, content):
+        """Called when the simulation reports its status.
         """
         pass
+    
+    def simulation_done(self, header, content):
+        """Called when a simulation finishes"""
+        pass
 
-    def cluster_status(self, header, content):
+    def cluster_done(self, header, content):
         """Called when a clustering job finishes, """
-        if content.status == 'done':
-            model = np.load(content.model_fn)
-            self.round += 1
-            self.structures = model['centers']
-            self.weights = model['populations']
+        # TODO: add data to adaptive sampling data structure
+        pass
 
     ########################################################################
     # END HANDLERS FOR INCOMMING MESSAGES
