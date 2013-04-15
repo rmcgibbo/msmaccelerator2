@@ -16,11 +16,9 @@ import warnings
 import yaml
 import zmq
 import uuid
-import cPickle as pickle
 from zmq.eventloop import ioloop
 ioloop.install()  # this needs to come at the beginning
 from zmq.eventloop.zmqstream import ZMQStream
-import numpy as np
 
 # local
 from ..core.app import App
@@ -197,15 +195,15 @@ class ToyMaster(ServerBase):
     initial conditions to propagate (the simulators) or data with which to build
     an MSM.
     """
-    
+
     system_xml = Unicode('system.xml', config=True, help='''
         Path to the XML file containing the OpenMM system to propagate''')
     system = Instance('simtk.openmm.openmm.System')
-    
+
     traj_outdir = Unicode('trajs/', help='Path where output trajectories will be stored')
     models_outdir = Unicode('models/', help='Path where MSMs will be saved')
     starting_states_outdir = Unicode('starting_states', help='Path where starting structures will be stored')
-    
+
     statebuilder = Instance('msmaccelerator.server.openmm.OpenMMStateBuilder')
     initial_pdb = Unicode('ala5.pdb', help='Initial structure. we need to generalize this...')
 
@@ -216,11 +214,11 @@ class ToyMaster(ServerBase):
 
     def start(self):
         super(ToyMaster, self).start()
-        
+
         # instantiate the machinery for building serialized openmm states
         self.statebuilder = OpenMMStateBuilder(self.system_xml)
         self.initial_structure = PDBFile(self.initial_pdb)
-        
+
         # create paths if need be
         for path in [self.traj_outdir, self.models_outdir, self.starting_states_outdir]:
             if not os.path.exists(path):
@@ -236,19 +234,19 @@ class ToyMaster(ServerBase):
         """Called at the when a Simulator device boots up. We give it
         starting conditions
         """
-        
+
         starting_state_fn = os.path.join(self.starting_states_outdir,
                                          '%s.xml' % header.sender_id)
         with open(starting_state_fn, 'w') as f:
             state = self.statebuilder.build(self.initial_structure.getPositions(asNumpy=True))
             f.write(state)
-        
+
         self.send_message(header.sender_id, 'simulate', content={
             'starting_state': {
                 'protocol': 'localfs',
                 'path': os.path.abspath(starting_state_fn)
             },
-            'topology_pdb' : {
+            'topology_pdb': {
                 'protocol': 'localfs',
                 'path': self.initial_pdb,
             },
@@ -267,7 +265,7 @@ class ToyMaster(ServerBase):
         """Called when the simulation reports its status.
         """
         pass
-    
+
     def simulation_done(self, header, content):
         """Called when a simulation finishes"""
         pass

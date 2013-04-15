@@ -37,7 +37,7 @@ class Modeler(Device):
     def cluster(self, header, content):
         outdir = content.outdir
         # load all of the trajectories
-        trajs = [np.load(fn) for fn in content.traj_fns]]
+        trajs = [np.load(fn) for fn in content.traj_fns]
 
         # concatenate them together
         data = np.asarray(np.concatenate(trajs), dtype=int)
@@ -78,7 +78,7 @@ class Modeler(Device):
                  t_matrix=t_matrix,
                  populations=populations,
                  mapping=mapping,
-                 trajs=content['traj_fns'],
+                 trajs=content.traj_fns,
                  centers=centers)
 
         self.send_message(msg_type='cluster_done', content={

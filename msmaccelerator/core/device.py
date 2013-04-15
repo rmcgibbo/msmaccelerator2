@@ -53,7 +53,7 @@ class Device(App):
         self.uuid = str(uuid.uuid4())
         self.socket = ctx.socket(zmq.DEALER)
         # we're using the uuid to set the identity of the socket
-        # AND we're going to put it explicitly inside of the header of 
+        # AND we're going to put it explicitly inside of the header of
         # the messages we send. Within the actual bytes that go over the wire,
         # this means that the uuid will actually be printed twice, but
         # its not a big deal. It makes it easier for the server application
