@@ -17,6 +17,7 @@ import yaml
 import zmq
 import uuid
 from zmq.eventloop import ioloop
+ioloop.install()  # this needs to come at the beginning
 from zmq.eventloop.zmqstream import ZMQStream
 import numpy as np
 
@@ -128,7 +129,14 @@ class ServerBase(App):
         Parameters
         ----------
         client_id : uuid
-            Who do you want to send the message to?
+            Who do you want to send the message to? This is string that
+            identifies the client to the ZMQ routing layer. Within our
+            messaging protocol, when the server recieves a message, it can
+            get the id of the sender from within the message's header -- but
+            this is dependent on the fact that the device.Device() code
+            puts the same string in the message header that it uses
+            to identify the socket to zeromq, in the line
+                setsockopt(zmq.IDENTITY, str(self.uuid))
         msg_type : str
             The type of the message
         content : dict
@@ -150,9 +158,8 @@ class ServerBase(App):
     def _dispatch(self, frames):
         """Callback that responds to new messages on the stream
 
-        This is the first point where new messages enter the system. Here,
-        we validate the messages and dispatch to correct handler based on the
-        'msg_type'
+        This is the first point where new messages enter the system. Basically
+        we just pack them up and send them on to the correct responder.
 
         Parameters
         ----------
@@ -214,7 +221,6 @@ class ToyMaster(ServerBase):
             if not os.path.exists(path):
                 os.makedirs(path)
 
-        ioloop.install()
         ioloop.IOLoop.instance().start()
 
     def initialize_structures(self):

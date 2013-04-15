@@ -50,14 +50,21 @@ class Device(App):
 
     def start(self):
         ctx = zmq.Context()
-        self.uuid = uuid.uuid4()
+        self.uuid = str(uuid.uuid4())
         self.socket = ctx.socket(zmq.DEALER)
-        self.socket.setsockopt(zmq.IDENTITY, str(self.uuid))
+        # we're using the uuid to set the identity of the socket
+        # AND we're going to put it explicitly inside of the header of 
+        # the messages we send. Within the actual bytes that go over the wire,
+        # this means that the uuid will actually be printed twice, but
+        # its not a big deal. It makes it easier for the server application
+        # code to have the sender of each message, and for the message json
+        # itself to be "complete", insted of having the sender in a separate
+        # data structure.
+        self.socket.setsockopt(zmq.IDENTITY, self.uuid)
         self.socket.connect('tcp://%s:%s' % (self.zmq_url, self.zmq_port))
 
         # send the "here i am message"
-        self.send_message(msg_type='register_%s' % self.__class__.__name__,
-                          content={})
+        self.send_message(msg_type='register_%s' % self.__class__.__name__)
 
         msg = self.recv_message()
         self.on_startup_message(msg)
@@ -68,9 +75,11 @@ class Device(App):
         """
         raise NotImplementedError('This method should be overriden in a device subclass')
 
-    def send_message(self, msg_type, content):
+    def send_message(self, msg_type, content=None):
         """Send a message to the server
         """
+        if content is None:
+            content = {}
         self.socket.send_json(pack_message(msg_type=msg_type, content=content,
                                            sender_id=self.uuid))
 
