@@ -134,5 +134,6 @@ if 'setuptools' in sys.modules:
 
 setup_args['packages'] = find_packages()
 check_openmm_version()
+check_mdtraj_version
 write_version_py('msmaccelerator/version.py')
 setup(**setup_args)
