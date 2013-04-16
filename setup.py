@@ -93,6 +93,12 @@ def find_packages():
     return packages
 
 
+def check_openmm_version():
+    from simtk.openmm import Platform
+    if not Platform.getOpenMMVersion() >= '5.1':
+        raise ValueError('MSMAccelerator requires OpenMM>=5.1')
+
+
 ##############################################################################
 # Script
 ##############################################################################
@@ -116,6 +122,6 @@ if 'setuptools' in sys.modules:
 
 
 setup_args['packages'] = find_packages()
-
+check_openmm_version()
 write_version_py('msmaccelerator/version.py')
 setup(**setup_args)

@@ -168,5 +168,8 @@ class BaseServer(App):
         if self.db is not None:
             self.messages_collection.save(msg.copy())
 
-        responder = getattr(self, msg.header.msg_type)
-        responder(msg.header, msg.content)
+        try:
+            responder = getattr(self, msg.header.msg_type)
+            responder(msg.header, msg.content)
+        except AttributeError:
+            print 'ERROR: RESPONDER NOT FOUND FOR MESSAGE %s' % msg.header.msg_type

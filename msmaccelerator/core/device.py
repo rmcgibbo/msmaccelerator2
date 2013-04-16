@@ -9,9 +9,10 @@ to get registered with the server and start their work.
 ##############################################################################
 
 import uuid
+import yaml
 import zmq
 
-from IPython.utils.traitlets import Int, Unicode
+from IPython.utils.traitlets import Int, Unicode, Bytes
 
 from .app import App
 from ..core.message import Message, pack_message
@@ -44,13 +45,16 @@ class Device(App):
 
     zmq_port = Int(12345, config=True, help='ZeroMQ port to connect to the server on')
     zmq_url = Unicode('127.0.0.1', config=True, help='URL to connect to server with')
+    uuid = Bytes(help='Unique identifier for this device')
+    def _uuid_default(self):
+        return str(uuid.uuid4())
+
 
     aliases = dict(zmq_port='Device.zmq_port',
                    zmq_url='Device.zmq_url')
 
     def start(self):
         ctx = zmq.Context()
-        self.uuid = str(uuid.uuid4())
         self.socket = ctx.socket(zmq.DEALER)
         # we're using the uuid to set the identity of the socket
         # AND we're going to put it explicitly inside of the header of
@@ -89,5 +93,6 @@ class Device(App):
         Note, this methos is not async -- it blocks the device until
         the serve delivers a message
         """
-        msg = self.socket.recv_json()
+        raw_msg = self.socket.recv()
+        msg = yaml.load(raw_msg)
         return Message(msg)

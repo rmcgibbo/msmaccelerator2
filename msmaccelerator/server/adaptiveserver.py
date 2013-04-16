@@ -3,7 +3,6 @@
 ##############################################################################
 # Imports
 ##############################################################################
-
 import os
 import glob
 from zmq.eventloop import ioloop
@@ -18,7 +17,7 @@ from simtk.openmm.app import PDBFile
 # ipython
 from IPython.utils.traitlets import Unicode, Instance
 
-
+print 'imported here'
 ##############################################################################
 # Classes
 ##############################################################################
@@ -48,7 +47,8 @@ class AdaptiveServer(BaseServer):
     aliases = dict(use_db='AdaptiveServer.use_db',
                    zmq_port='BaseServer.zmq_port',
                    collection_suffix='BaseServer.collection_suffix',
-                   mongo_url='BaseServer.mongo_url')
+                   mongo_url='BaseServer.mongo_url',
+                   system_xml='AdaptiveServer.system_xml')
 
     def start(self):
         super(AdaptiveServer, self).start()
@@ -94,10 +94,13 @@ class AdaptiveServer(BaseServer):
     def register_Modeler(self, header, content):
         """Called when a Modeler device boots up, asking for a path to data.
         """
-        self.send_message(header.sender_id, 'cluster', content={
-            'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.npy')),
+        self.send_message(header.sender_id, 'construct_model', content={
+            'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.dcd')),
             'outdir': os.path.abspath(self.models_outdir),
         })
+
+    def Modeler_finished(self, header, content):
+        pass
 
     def simulation_status(self, header, content):
         """Called when the simulation reports its status.
@@ -106,11 +109,6 @@ class AdaptiveServer(BaseServer):
 
     def simulation_done(self, header, content):
         """Called when a simulation finishes"""
-        pass
-
-    def cluster_done(self, header, content):
-        """Called when a clustering job finishes, """
-        # TODO: add data to adaptive sampling data structure
         pass
 
     ########################################################################

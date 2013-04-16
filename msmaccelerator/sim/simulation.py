@@ -14,7 +14,6 @@ from simtk.openmm.app import (Simulation, DCDReporter, PDBFile)
 
 # local
 from .reporters import CallbackReporter
-from ..core.openmm import OpenMMConfigurableMixin
 from ..core.device import Device
 
 #############################################################################
@@ -22,7 +21,7 @@ from ..core.device import Device
 ##############################################################################
 
 
-class Simulator(Device, OpenMMConfigurableMixin):
+class Simulator(Device):
     name = 'simulate'
     path = 'msmaccelerator.sim.simulation.Simulator'
     short_description = 'Run a single round of dynamics'
