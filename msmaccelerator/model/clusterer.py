@@ -121,7 +121,7 @@ class Modeler(Device):
 
         # tell the server that we're done
         self.send_message(msg_type='modeler_done', content={
-            'status': 'sucess'
+            'status': 'success'
         })
 
 
