@@ -101,14 +101,17 @@ class Modeler(Device):
                             counts_data=counts.data,
                             counts_indices=counts.indices,
                             counts_intptr=counts.indptr,
+                            counts_shape=np.array([counts.shape])
                             # rev counts matrix (CSR)
                             rev_counts_data=rev_counts.data,
                             rev_counts_indices=rev_counts.indices,
                             rev_counts_indptr=rev_counts.indptr,
+                            rev_counts_shape=np.array([rev_counts.shape])
                             # transition matrix (CSR)
                             t_matrix_data=t_matrix.data,
                             t_matrix_indices=t_matrix.indices,
                             t_matrix_indptr=t_matrix.indptr,
+                            t_matrix_shape=np.array([t_matrix.shape])
                             populations=populations,
                             mapping=mapping,
                             assignments=assignments,
