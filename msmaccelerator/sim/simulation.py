@@ -10,9 +10,16 @@ import os
 from IPython.utils.traitlets import Unicode, Int, Instance, Bool
 
 from simtk.openmm import XmlSerializer
-from simtk.openmm.app import (Simulation, DCDReporter, PDBFile)
+from simtk.openmm.app import (Simulation, PDBFile)
 
 # local
+try:
+    from mdtraj.reporters import HDF5Reporter
+except ImportError:
+    print 'You need the HDF5Reporter in the mdtraj package'
+    print 'current its in a PR, here https://github.com/rmcgibbo/mdtraj/pull/12'
+    raise
+
 from .reporters import CallbackReporter
 from ..core.device import Device
 
@@ -41,7 +48,7 @@ class Simulator(Device):
     number_of_steps = Int(10000, config=True, help='''
         Number of steps of dynamics to do''')
 
-    report_internval = Int(1000, config=True, help='''
+    report_interval = Int(1000, config=True, help='''
         Interval at which to report positions to a file, in units of steps''')
 
     minimize = Bool(True, config=True, help='''Do local energy minimization on
@@ -56,7 +63,7 @@ class Simulator(Device):
     aliases = dict(system_xml='Simulator.system_xml',
                   integrator_xml='Simulator.integrator_xml',
                   number_of_steps='Simulator.number_of_steps',
-                  report_internval='Simulator.report_internval',
+                  report_interval='Simulator.report_interval',
                   zmq_port='Device.zmq_port',
                   zml_url='Device.zmq_url')
 
@@ -86,8 +93,8 @@ class Simulator(Device):
         """
         state, topology = self.deserialize_input(content)
 
-        # path to store the dcd file that we create
-        outfn = os.path.join(content.outdir, '%s.dcd' % self.uuid)
+        # path to store the trajectory file that we create
+        outfn = os.path.join(content.outdir, '%s.lh5' % self.uuid)
 
         simulation = Simulation(topology, self.system, self.integrator)
         # do the setup
@@ -175,5 +182,8 @@ class Simulator(Device):
             print report
 
         simulation.reporters.append(CallbackReporter(zmq_reporter_callback,
-            self.report_internval, step=True, potentialEnergy=True, temperature=True))
-        simulation.reporters.append(DCDReporter(outfn, self.report_internval))
+                self.report_interval, step=True, potentialEnergy=True,
+                temperature=True))
+        simulation.reporters.append(HDF5Reporter(outfn,
+                self.report_interval,
+                n_expected_frames=int(self.number_of_steps/self.report_interval)))

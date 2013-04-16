@@ -11,13 +11,9 @@ ioloop.install()  # this needs to come at the beginning
 # local
 from .openmm import OpenMMStateBuilder
 from .baseserver import BaseServer
-
 from simtk.openmm.app import PDBFile
-
 # ipython
 from IPython.utils.traitlets import Unicode, Instance
-
-print 'imported here'
 ##############################################################################
 # Classes
 ##############################################################################
@@ -95,7 +91,7 @@ class AdaptiveServer(BaseServer):
         """Called when a Modeler device boots up, asking for a path to data.
         """
         self.send_message(header.sender_id, 'construct_model', content={
-            'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.dcd')),
+            'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.lh5')),
             'outdir': os.path.abspath(self.models_outdir),
         })
 

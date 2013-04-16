@@ -96,7 +96,18 @@ def find_packages():
 def check_openmm_version():
     from simtk.openmm import Platform
     if not Platform.getOpenMMVersion() >= '5.1':
-        raise ValueError('MSMAccelerator requires OpenMM>=5.1')
+        raise ValueError('MSMAccelerator requires OpenMM >= 5.1')
+
+def check_mdtraj_version():
+    import pkg_resources  # part of setuptools
+    err = ValueError('MSMAccelerator requires MDTraj version 0.1 or greater '
+                     'https://github.com/rmcgibbo/mdtraj')
+    try:
+        if not pkg_resources.require("MDTraj")[0].version >= '0.1':
+            raise err
+    except pkg_resources.DistributionNotFound:
+        raise err
+
 
 
 ##############################################################################

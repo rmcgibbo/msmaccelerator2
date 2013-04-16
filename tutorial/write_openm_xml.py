@@ -29,3 +29,6 @@ with open('integrator.xml', 'w') as f:
     f.write(XmlSerializer.serialize(integrator))
 
 print system
+
+#import IPython as ip
+#ip.embed()

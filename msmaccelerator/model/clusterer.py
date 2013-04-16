@@ -17,43 +17,10 @@ import msmbuilder.Trajectory
 import msmbuilder.MSMLib
 import msmbuilder.clustering
 
-
 # local
 from ..core.device import Device
 
 from IPython.utils.traitlets import Unicode, Int, Float, Enum, Bool
-
-############################################################################
-# Utilities
-############################################################################
-
-def reindex_list(indices, sublist_lengths):
-    """Given a list of indices giving the position of items in a long list,
-    which actually composed of a number of short lists concatenated together,
-    determine which short list, and what index within that short list, each
-    entry corresponds to
-
-    Example
-    -------
-    >>> indices = [1, 31, 41]
-    >>> sublist_lengths = [20, 20, 20]
-    reindex_list(indices, sublist_lengths)
-    array([[ 0,  1],
-           [ 1, 11],
-           [ 1, 1]])
-    """
-    cumulative = np.concatenate([[0], np.cumsum(sublist_lengths)])
-    if np.any(indices >= cumulative[-1]):
-        raise ValueError('Index off the end')
-
-    output = np.zeros((len(indices), 2), dtype=int)
-    for ii, longindex in enumerate(indices):
-        k = np.argmax(cumulative[cumulative <= longindex])
-        residual = longindex - cumulative[k]
-
-        output[ii] = k, residual
-    return output
-
 
 #############################################################################
 # Handlers
@@ -77,10 +44,6 @@ class Modeler(Device):
         containing the indices of atoms to use in the RMSD computation''')
     rmsd_distance_cutoff = Float(0.2, config=True, help='''Distance cutoff fo
         clustering''')
-    conf_pdb = Unicode('ala5.pdb', config=True, help='''PDB file to use for
-        the topology. Note: What we really need to do is write a pytables
-        reporter using the mdtraj format, and skip DCD all together. Then
-        the topology would be saved, and we wouldn't have this issue''')
     symmetrize = Enum(['MLE', 'Transpose', None], default='MLE', config=True,
         help='''Symmetrization method for constructing the reversibile counts
         matrix''')
@@ -147,13 +110,13 @@ class Modeler(Device):
 
         for traj_fn in traj_fns:
             # use the mdtraj dcd reader, but then monkey-patch
-            # the coordinate array into a msmbuilder trajectory
-            xyz = mdtraj.trajectory.load(traj_fn, top=self.conf_pdb).xyz
+            # the coordinate array into shim for the msmbuilder clustering
+            # code that wants the trajectory to act like a dict with the XYZList
+            # key.
+            t =  mdtraj.trajectory.load(traj_fn)
+            t2 = ShimTrajectory(t.xyz[::self.stride, atom_indices, :])
 
-            t = msmbuilder.Trajectory.load_from_pdb(self.conf_pdb)
-            t['XYZList'] = xyz[::self.stride]
-            t.restrict_atom_indices(atom_indices)
-            trajs.append(t)
+            trajs.append(t2)
 
         if len(trajs) == 0:
             raise ValueError('No trajectories found!')
@@ -196,3 +159,50 @@ class Modeler(Device):
         # unpack
         rev_counts, t_matrix, populations, mapping = result
         return counts, rev_counts, t_matrix, populations, mapping
+
+
+############################################################################
+# Utilities
+############################################################################
+
+def reindex_list(indices, sublist_lengths):
+    """Given a list of indices giving the position of items in a long list,
+    which actually composed of a number of short lists concatenated together,
+    determine which short list, and what index within that short list, each
+    entry corresponds to
+
+    Example
+    -------
+    >>> indices = [1, 31, 41]
+    >>> sublist_lengths = [20, 20, 20]
+    reindex_list(indices, sublist_lengths)
+    array([[ 0,  1],
+           [ 1, 11],
+           [ 1, 1]])
+    """
+    cumulative = np.concatenate([[0], np.cumsum(sublist_lengths)])
+    if np.any(indices >= cumulative[-1]):
+        raise ValueError('Index off the end')
+
+    output = np.zeros((len(indices), 2), dtype=int)
+    for ii, longindex in enumerate(indices):
+        k = np.argmax(cumulative[cumulative <= longindex])
+        residual = longindex - cumulative[k]
+
+        output[ii] = k, residual
+    return output
+
+class ShimTrajectory(dict):
+    """This is a dict that can be used to interface some xyz coordinates
+    with MSMBuilder's clustering algorithms.
+
+    I'm really sorry that this is necessary. It's horridly ugly, but it comes
+    from the fact that I want to use the mdtraj trajectory object (its better),
+    but the OpenMM code hasn't been rewritted to use the mdtraj trajectory
+    yet. Soon, we will move mdtraj into msmbuilder, and this won't be necessary.
+    """
+    def __init__(self, xyz):
+        self['XYZList'] = xyz
+
+    def __len__(self):
+        return len(self['XYZList'])
