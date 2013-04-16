@@ -33,22 +33,34 @@ class Modeler(Device):
     short_description = 'Run the modeler, building an MSM on the available data'
     long_description = '''This device will connect to the msmaccelerator server,
         request the currently available data and build an MSM. That MSM will be
-        used by the server to drive future rounds of adaptive sampling'''
+        used by the server to drive future rounds of adaptive sampling.
+        Currently, we're using RMSD clustering with the K-centers distance
+        metric. We can make this more configurable in the future.'''
 
-    stride = Int(2, config=True, help='''Subsample data by taking only
+    stride = Int(1, config=True, help='''Subsample data by taking only
         every stride-th point''')
     lag_time = Int(1, config=True, help='''Lag time for building the
-        model, in units of the stride. This way, we don't do an assignment step''')
-
+        model, in units of the stride. Currently, we are not doing the step
+        in MSMBuilder that is refered to as "assignment", where you assign
+        the remaining data that was not used during clustering to the cluster
+        centers that were identified.''')
     rmsd_atom_indices = Unicode('AtomIndices.dat', config=True, help='''File
-        containing the indices of atoms to use in the RMSD computation''')
-    rmsd_distance_cutoff = Float(0.2, config=True, help='''Distance cutoff fo
-        clustering''')
+        containing the indices of atoms to use in the RMSD computation. Using
+        a PDB as input, this file can be created with the MSMBuilder script
+        CreateAtomIndices.py''')
+    rmsd_distance_cutoff = Float(0.2, config=True, help='''Distance cutoff for
+        clustering, in nanometers. We will continue to create new clusters
+        until each data point is within this cutoff from its cluster center.''')
     symmetrize = Enum(['MLE', 'Transpose', None], default='MLE', config=True,
         help='''Symmetrization method for constructing the reversibile counts
-        matrix''')
+        matrix.''')
     ergodic_trimming = Bool(False, config=True, help='''Do ergodic trimming when
-        constructing the Markov state model''')
+        constructing the Markov state model. This is generally a good idea for
+        building MSMs in the high-data regime where you wish to prevent transitions
+        that appear nonergodic because they've been undersampled from influencing
+        your model, but is inappropriate in the sparse-data regime when you're
+        using min-counts sampling, because these are precisiely the states that
+        you're most interested in.''')
 
     aliases = dict(stride='Modeler.stride',
                    lag_time='Modeler.lag_time',
@@ -68,14 +80,22 @@ class Modeler(Device):
         return getattr(self, msg.header.msg_type)(msg.header, msg.content)
 
     def construct_model(self, header, content):
+        """All the model building code. This code is what's called by the
+        server after registration."""
         # the message needs to not contain unicode
 
+        # load up all of the trajectories
         trajs = self.load_trajectories(content.traj_fns)
+
+        # run clustering
         assignments, generator_indices = self.cluster(trajs)
+
+        # build the MSM
         counts, rev_counts, t_matrix, populations, mapping =  self.build_msm(assignments)
 
         outfn = os.path.join(content.outdir, self.uuid + '.h5')
         # TODO: add transparent saving/loading of CSR matricies to msmbuilder.io
+        # save the results to disk
         msmbuilder.io.saveh(outfn,
                             # counts matrix (CSR)
                             counts_data=counts.data,
@@ -96,6 +116,7 @@ class Modeler(Device):
                             lag_time=np.array([self.lag_time]),
                             traj_fns=np.array(content.traj_fns))
 
+        # tell the server that we're done
         self.send_message(msg_type='Modeler_finished', content={
             'outfn': outfn
         })
@@ -125,6 +146,23 @@ class Modeler(Device):
 
 
     def cluster(self, trajectories):
+        """Cluster the trajectories into microstates.
+
+        Returns
+        -------
+        assignments : np.ndarray, dtype=int, shape=[n_trajs, max_n_frames]
+            assignments is a 2d arry giving the microstate that each frame
+            from the simulation is assigned to. The indexing semantics are
+            a little bit nontrivial because of the striding and the lag time.
+            They are that assignments[i,j]=k means that in the `ith` trajectory,
+            the `j*self.stride`th frame is assiged to microstate `k`.
+        generator_indices : np.ndarray, dtype=int, shape=[n_clusters, 2]
+            This array gives the indices of the clusters centers, with respect
+            to their position in the trajectories on disk. the semantics are
+            that generator_indices[i, :]=[k,l] means that the `ith` cluster's center
+            is in trajectory `k`, in its `l`th frame. Because of the striding,
+            `l` will always be a multiple of `self.stride`.
+        """
         metric = msmbuilder.metrics.RMSD()
         clusterer = msmbuilder.clustering.KCenters(metric, trajectories,
                                         distance_cutoff=self.rmsd_distance_cutoff)
@@ -151,12 +189,13 @@ class Modeler(Device):
         return assignments, generator_indices
 
     def build_msm(self, assignments):
+        """Build the MSM from the microstate assigned trajectories"""
         counts = msmbuilder.MSMLib.get_count_matrix_from_assignments(assignments,
             lag_time=self.lag_time)
 
         result = msmbuilder.MSMLib.build_msm(counts, symmetrize=self.symmetrize,
                                              ergodic_trimming=self.ergodic_trimming)
-        # unpack
+        # unpack the results
         rev_counts, t_matrix, populations, mapping = result
         return counts, rev_counts, t_matrix, populations, mapping
 
@@ -198,7 +237,7 @@ class ShimTrajectory(dict):
 
     I'm really sorry that this is necessary. It's horridly ugly, but it comes
     from the fact that I want to use the mdtraj trajectory object (its better),
-    but the OpenMM code hasn't been rewritted to use the mdtraj trajectory
+    but the msmbuilder code hasn't been rewritted to use the mdtraj trajectory
     yet. Soon, we will move mdtraj into msmbuilder, and this won't be necessary.
     """
     def __init__(self, xyz):
