@@ -84,7 +84,10 @@ class AdaptiveServer(BaseServer):
                 'protocol': 'localfs',
                 'path': self.initial_pdb,
             },
-            'outdir': os.path.abspath(self.traj_outdir),
+            'output': {
+                'protocol': 'localfs',
+                'path': os.path.join(os.path.abspath(self.traj_outdir), header.sender_id + '.lh5'),
+            },
         })
 
     def register_Modeler(self, header, content):
@@ -92,11 +95,16 @@ class AdaptiveServer(BaseServer):
         """
         self.send_message(header.sender_id, 'construct_model', content={
             'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.lh5')),
-            'outdir': os.path.abspath(self.models_outdir),
+            'output': {
+                'protocol': 'localfs',
+                'path': os.path.join(os.path.abspath(self.traj_outdir), header.sender_id + '.h5'),
+            }
         })
 
-    def Modeler_finished(self, header, content):
-        pass
+    def modeler_done(self, header, content):
+        """Called when a Modeler finishes, returning the path to the model
+        build.
+        """
 
     def simulation_status(self, header, content):
         """Called when the simulation reports its status.

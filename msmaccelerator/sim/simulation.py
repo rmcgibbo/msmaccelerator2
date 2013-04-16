@@ -93,9 +93,6 @@ class Simulator(Device):
         """
         state, topology = self.deserialize_input(content)
 
-        # path to store the trajectory file that we create
-        outfn = os.path.join(content.outdir, '%s.lh5' % self.uuid)
-
         simulation = Simulation(topology, self.system, self.integrator)
         # do the setup
         self.set_state(state, simulation)
@@ -113,17 +110,20 @@ class Simulator(Device):
                 raise
             pass
 
-        self.add_reporters(simulation, outfn)
+        assert content.output.protocol == 'localfs', "I'm currently only equiped for localfs output"
+        self.add_reporters(simulation, content.output.path)
 
         # run dynamics!
         simulation.step(self.number_of_steps)
+        
+        for reporter in simulation.reporters:
+            # explicitly delete the reporters so that any open file handles
+            # are closed.
+            del reporter
 
         # tell the master that I'm done
         self.send_message(msg_type='simulation_done', content={
-            'traj_fn': {
-                'protocol': 'localfn',
-                'path': outfn
-            }
+            'status': 'success',
         })
 
     ##########################################################################
@@ -181,9 +181,11 @@ class Simulator(Device):
             })
             print report
 
-        simulation.reporters.append(CallbackReporter(zmq_reporter_callback,
+        callback_reporter = CallbackReporter(zmq_reporter_callback,
                 self.report_interval, step=True, potentialEnergy=True,
-                temperature=True))
-        simulation.reporters.append(HDF5Reporter(outfn,
-                self.report_interval,
-                n_expected_frames=int(self.number_of_steps/self.report_interval)))
+                temperature=True)
+        h5_reporter = HDF5Reporter(outfn, self.report_interval,
+                n_expected_frames=int(self.number_of_steps/self.report_interval))
+
+        simulation.reporters.append(callback_reporter)
+        simulation.reporters.append(h5_reporter)

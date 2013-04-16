@@ -83,6 +83,7 @@ class Modeler(Device):
         """All the model building code. This code is what's called by the
         server after registration."""
         # the message needs to not contain unicode
+        assert content.output.protocol == 'localfs', "I'm currently only equipped for localfs output"
 
         # load up all of the trajectories
         trajs = self.load_trajectories(content.traj_fns)
@@ -93,10 +94,9 @@ class Modeler(Device):
         # build the MSM
         counts, rev_counts, t_matrix, populations, mapping =  self.build_msm(assignments)
 
-        outfn = os.path.join(content.outdir, self.uuid + '.h5')
         # TODO: add transparent saving/loading of CSR matricies to msmbuilder.io
         # save the results to disk
-        msmbuilder.io.saveh(outfn,
+        msmbuilder.io.saveh(content.output.path,
                             # counts matrix (CSR)
                             counts_data=counts.data,
                             counts_indices=counts.indices,
@@ -117,8 +117,8 @@ class Modeler(Device):
                             traj_fns=np.array(content.traj_fns))
 
         # tell the server that we're done
-        self.send_message(msg_type='Modeler_finished', content={
-            'outfn': outfn
+        self.send_message(msg_type='modeler_done', content={
+            'status': 'sucess'
         })
 
 
