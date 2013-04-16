@@ -189,6 +189,28 @@ we'll have a webapp that can do this monitoring.
 For example, if you input `find({"header.msg_type": "register_simulator"}).limit(10)` into their
 search box, you'll see all the events that correspond to a new simulation starting up.
 
+
+Configuration
+-------------
+Any sufficiently complex command line application always gets bogged down in
+the fact that you need to pass in a lot of configurable options. You can end
+up wasting a lot of effort passing tens of command line arguments, and getting
+the help text on the command line arguments consistent with the internal docstrings
+is a pain during active development. Plus, you've got to write all of this
+biolerplate that passes parses the command line flags and passes them in to
+wherever they're used. It's not very [DRY](https://en.wikipedia.org/wiki/Don't_repeat_yourself)
+
+For this project, we're using the [IPython configuration system](http://ipython.org/ipython-doc/stable/config/overview.html),
+which I (@rmcgibbo) [think](http://python.6.x6.nabble.com/IPython-config-HasTraits-Traitlets-as-an-independent-library-td5014385.html)
+is by far the best solution in the python ecosystem to this problem.
+
+Every configurable can either be supplied on the command line or in a
+configuration file. To see how to specify things on the command line, pass the
+`-h` flag to any of the `accerator` subcommands. To create a sample
+configuration file that you can edit, run the `accelerator mkprofile` command.
+If you have a config file, and you also pass in the same option on the command
+line, the command line option will take precedence.
+
 License
 -------
 GPLv3s

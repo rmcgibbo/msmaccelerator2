@@ -111,7 +111,8 @@ class RootApplication(App):
     path = 'msmaccelerator.core.app.RootApplication'
     short_description = ('MSMAccelerator: Adaptive Sampling Molecular Dynamics '
                          'with Markov State Models')
-    long_description = """MSMAccelerator is an adaptive sampling"""
+    long_description = """MSMAccelerator is an distributed adaptive sampling
+        engine. Please use the appropriate subcommand to get started."""
     citation_string = 'If you use this sofware in a publication, please cite our papers :)'
 
     def __init__(self, *args, **kwargs):
