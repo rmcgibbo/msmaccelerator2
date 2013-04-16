@@ -38,33 +38,35 @@ these packages, visit their respective websites for instructions.
 
 MSMAccelerator has a distributed message-passing architecture, based on the
 fast and lightweight messaging protocol [ZeroMQ](http://www.zeromq.org/). It
-also uses the configuration framework from [IPython](http://ipython.org/).
-The easiest way to install these libraries is with `easy_install` or `pip`,
-the python package manager
+also uses the configuration framework from [IPython](http://ipython.org/). There
+are a few other miscellaneous dependencies.  The easiest way to install these
+libraries is with [pip](https://pypi.python.org/pypi/pip), the python package manager.
 
 ```
-$ easy_install pyzmq     # messaging
-$ easy_install ipython   # configration framework
-$ easy_install pyyaml    # message serialization
-$ easy_install pymongo   # database interaction
+$ pip install pyzmq     # messaging framework
+$ pip install ipython   # configration framework
+$ pip install pyyaml    # message serialization
+$ pip install pymongo   # database interaction
+# Code for loading and saving trajectories lives in a different
+# package called MDTraj. You can install that with the following
+$ pip install git+git://github.com/rmcgibbo/mdtraj.git
 ```
 
 TODO: Eliminate the pyyaml dependency by fixing the unicode issues with
-the stdlib json code.
+the stdlib's json code.
 
-## Running some code
+Running some code
+-----------------
 
-Start the MSMAccelerator server with `accelerator serve &`. This process will
-run in the background and orchestrate state across the application. Now you can
+Move into the `tutorial` directory, and start the MSMAccelerator server in
+the background with `accelerator serve &`. This process will run in the
+background and orchestrate state across the application. Now you can
 start a single simulation with `accelerator simulate`, or build an MSM based on
 your existing data with `accelerator model`.
 
-TODO: Move stuff to a tutorial directory, with the ala5 pdb, and a saved
-system.xml and integrator.xml.
-
 Messaging protocol
 ------------------
-The communication structure is really modeled off the FAH workserver, instead
+The communication structure is modeled off the FAH workserver, instead
 of workqueue. The accelerator server responds to requests. *It doesn't
 initiate them*. The two types of requests it (basically) responds to are
 a simulator coming online and saying "let me run a simulation", and a
@@ -73,59 +75,61 @@ of these two processes -- how many of each to run, how many cycles, etc, is
 NOT controlled by the server. That is the domain of the queueing system or
 whatever.
 
-- The server process (`accelerator serve`) runs with a ZMQ REP (reply) socket. It
+- The server process (`accelerator serve`) runs with a ZMQ router socket. It
   is capable of communicating with both simulators and modelers. When
   a simulator comes online, it pings the server who replies with an
   initial structure. When the simulator is done, it tells the server and then
   exits.
 - Note that the simulator does not actually send back any data, it just sends
-  back the location where the data is saved. Currently, this is just an
-  absolute path on the local system, but in the future it could be a S3 bucket
-  or something. But we really *should* take advantage of shared filesystems
-  on clusters.
+  back the location where the data is saved. Currently, we're sending paths
+  in a JSON struct under the "protocol" "localfs", indicating that the files
+  are transfered via a shared local file system. In the future, we can expand
+  the protocol support to include something else, like an S3 bucket or HTTP.
 - When a modeler comes online, it pings the server who replies with a list
   of all of the trajectories currently on disk. It builds an MSM and tells the
   server when it's done. When the server hears that the MSM is built, it loads
-  some info from the MSM (currently the cluster centers and eq. populations)
-  which it uses to generate future starting structures (currently by sampling
-  from the multinomial). This is where we plug in new adaptive sampling
+  some info from the MSM. This is where we plug in new adaptive sampling
   algorithms.
 - It's really important that the server have a LIGHT memory and compute
-  footprint, because its probably going to run on the head node. If need-be,
-  the actual selection of the starting structure (e.g. from the multinomial
-  or whatever adaptive sampling strategy is being used) could be done within
-  the "simulator" process if the selection is getting too expensive within
-  the server.
-- All of the messages sent over the sockets will be JSON-encoded, following
-  (basically), the structure set out by the IPython project for communication
-  between the kernel and the frontends. I also want to log all of these
-  messages to a database like mongodb that plays nice with JSON. The exact
-  format of the messages is described in `msmaccelerator/message.py`. For some
-  background, you can also ready the [IPython messaging specification](http://ipython.org/ipython-doc/dev/development/messaging.html).
+  footprint, because its probably going to run on a cluster's head node under
+  most circumstances.
+- All messages between theserver and devices are JSON-encoded, following a
+  format set out in `messaging.py`. This format is inspired by the
+  [IPython messaging specification](http://ipython.org/ipython-doc/dev/development/messaging.html).
+  One design goal of the messaging spec. is that the messages are suitable to
+  be logged directly to a database backend for monitoring.
 
+Communicating initial structures & setting simulation params.
+-------------------------------------------------------------
+We're bootstrapping off the excellent work that's been done in OpenMM5.1 and for
+FAH Core17 with XML serialization. The `accelerator simulate` engine takes
+as input the a sytem and integrator XML file that together specify the run
+parameters. It's up to you to prepare those XML files.
 
-Design
-------
+Note: Currently, because of some questionable design decisions, the server
+also needs access to the system xml file, which it uses to prepare the serialized
+state that's communicated to simulator devices.
+
+Design Goals
+------------
 - The app should be able to work on clusters with PBS systems. That means
   being able to work within the constraints of a queueing system, and taking
   advantage of the shared filesystem.
 - Clustering and MSM-building cannot be required to happen on the head node,
   because many HPC clusters do not allow this. There needs to be separate
-  "jobs" submitted for the MSM building.
+  processes submitted for the MSM building.
 - WorkQueue was holding MSMAccelerator1 back. Installation was a pain, and
   debugging was hard. I felt like we were battling *against* the framework,
-  which is not good. We need to switch to a different framework for
-  interprocess communication.
+  which is not good. ZeroMQ is the answer.
 - Trying to be agnostic w.r.t. MD engine is really hard, because you don't have a lot
   of robust interchange formats to work with. In MSMAccelerator1, we were
   trying to use PDBs to communicate initial state to the simulation engines,
   but PDB is such a loosey-goosey format, that this caused a lot of headaches.
-  This code, at least for the first iteration, should be tied more closely
-  to a single MD engine.
+  This code, at least for the first iteration, is tied to OpenMM.
 
 
-Execution structure
--------------------
+Execution Workflow
+------------------
 Both the simulator and the clusterer exit when they're done with a single
 round. **This is important** because it means that we can run the entire
 workflow as a set of dependent PBS jobs, alternating between simulation and
@@ -169,8 +173,8 @@ it comes online.
 
 Database
 --------
-To track the messages, I'm using `MongoDB`. To make it easy, I'm using this cloud mongodb
-service called [MongoHQ](https://www.mongohq.com/home). You can go there and sign up
+To track the messages, we're using `MongoDB`. To make it easy, there are some cloud mongodb
+services, including [MongoHQ](https://www.mongohq.com/home). You can go there and sign up
 for a free account. Then, find the URI used to connect to your database. It should look
 like `mongodb://<user>:<password>@dharma.mongohq.com:10077/msmaccelerator`. Substitute in
 your real username and password, and then export it as the environment variable `MONGO_URL`,
@@ -179,7 +183,8 @@ like
 `$ export MONGO_URL='mongodb://<user>:<password>@dharma.mongohq.com:10077/msmaccelerator'`
 
 Currently, all the messages will be saved, when they hit the server, both on the sending and
-recieving end. On the MongoHQ website, you can track the status of the messages.
+recieving end. On the MongoHQ website, you can track the status of the messages. In the future,
+we'll have a webapp that can do this monitoring.
 
 For example, if you input `find({"header.msg_type": "register_simulator"}).limit(10)` into their
 search box, you'll see all the events that correspond to a new simulation starting up.
