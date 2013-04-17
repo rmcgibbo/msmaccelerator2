@@ -1,5 +1,4 @@
-"""
-An OpenMM reporter that passes off the current report, as a dict, to a
+"""An OpenMM reporter that passes off the current report, as a dict, to a
 callback. We can use this to publish the report over a socket instead of
 printing it to stdout.
 """

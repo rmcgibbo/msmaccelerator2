@@ -47,6 +47,11 @@ class App(Application):
     config_file_name = 'msmaccelerator_config.py'
     option_description = u''
 
+    def _log_level_default(self):
+        # set the default log level thoughout all subclasses to be
+        # INFO. Verbose is good.
+        return 'INFO'
+
     def print_description(self):
         "Print the application description"
         lines = []

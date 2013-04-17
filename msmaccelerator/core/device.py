@@ -46,9 +46,9 @@ class Device(App):
     zmq_port = Int(12345, config=True, help='ZeroMQ port to connect to the server on')
     zmq_url = Unicode('127.0.0.1', config=True, help='URL to connect to server with')
     uuid = Bytes(help='Unique identifier for this device')
+
     def _uuid_default(self):
         return str(uuid.uuid4())
-
 
     aliases = dict(zmq_port='Device.zmq_port',
                    zmq_url='Device.zmq_url')

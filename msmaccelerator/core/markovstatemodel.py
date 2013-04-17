@@ -4,79 +4,139 @@ This is still a work in progress. See the github issue I opened on this for
 discussion
 https://github.com/rmcgibbo/msmaccelerator2/issues/8
 """
+##############################################################################
+# Imports
+##############################################################################
+# stdlib
+import numbers
 
+#3rd party
 import tables
+import msmbuilder.io
+import scipy.sparse
+import numpy as np
+from IPython.utils.traitlets import HasTraits, Instance
+
+#local
+from ..core.traitlets import CNumpyArray
+
+##############################################################################
+# Classes
+##############################################################################
 
 
-class MarkovStateModel(object):
-    def __init__(self):
-        self._generators = None
-        self._populations = None
-        self._raw_counts = None
-        self._reversible_counts = None
-        self._transition_matrix = None
-        self._trajectories = None
-        self._tables_fh = None
+class MarkovStateModel(HasTraits):
+    """Class to hold all of the attributes of a Markov state model,
+    (optionally) backed by a HDF5 file.
+    """
+    handle = Instance('tables.file.File')
+
+    counts = Instance('scipy.sparse.csr.csr_matrix')
+    reversible_counts = Instance('scipy.sparse.csr.csr_matrix')
+    transition_matrix = Instance('scipy.sparse.csr.csr_matrix')
+    populations = CNumpyArray()
+    mapping = CNumpyArray()
+    assignments = CNumpyArray()
+    generator_indices = CNumpyArray()
+    assignments_stride = Instance(int)
+    lag_time = Instance(int)
+    traj_filenames = CNumpyArray()
 
     @classmethod
-    def load(self, filename):
-        self._fh = tables.File(filename, 'r')
+    def load(cls, filename):
+        return cls(handle=tables.openFile(filename, 'r'))
 
     def save(self, filename):
-        pass
-        # io.saveh(filename, generators=self._generators,
-        #                    populations=self._populations,
-        #                    raw_counts=self._raw_counts,
-        #                    reversible_counts=self._reversibile_counts,
-        #                    transition_matrix=self._transition_matrix,
-        #                    trajectories=self._trajectories)
-
-    @property
-    def generators(self):
-        if self._generators is not None:
-            return self._generators
-        if self._fh is not None:
-            self._generators = self._fh.root.generators[:]
-            return self._generators
-
-        raise ValueError('Sorry')
-
-    @generators.setter
-    def generators(self, value):
-        self._generators = value
+        kwargs = {}
+        for name in self.class_trait_names():
+            attr = getattr(self, name)
+            if isinstance(attr, scipy.sparse.csr_matrix):
+                kwargs[name + '_data'] = attr.data
+                kwargs[name + '_indices'] = attr.indices
+                kwargs[name + '_indptr'] = attr.indptr
+                kwargs[name + '_shape'] = np.array(attr.shape)
+            elif isinstance(attr, np.ndarray):
+                kwargs[name] = attr
+            elif isinstance(attr, numbers.Number):
+                kwargs[name] = np.array([attr])
+            elif isinstance(attr, list):
+                kwargs[name] = np.array(attr)
 
 
-    @property
-    def populations(self):
-        return self._populations
-    @populations.setter
-    def populations(self, value):
-        self._populations = value
+        msmbuilder.io.saveh(filename, **kwargs)
 
-    @property
-    def raw_counts(self):
-        return self._raw_counts
-    @raw_counts.setter
-    def raw_counts(self, value):
-        self._raw_counts = value
+    def close(self):
+        if self.handle is not None:
+            self.handle.close()
 
-    @property
-    def reversible_counts(self):
-        return self._reversible_counts
-    @reversible_counts.setter
-    def reversible_counts(self, value):
-        self._reversible_counts = value
+    ##########################################################################
+    # Default methods: These work with HasTraits to allow the the matricies
+    # to be loaded lazily from disk if they're in the hdf5 file with `handle`
+    ##########################################################################
+    # This code is a little repetitive -- SORRY. It would be possible to
+    # factor it out into a metaclass. That might make it shorter, but
+    # it would be less comprehisible.
+    ##########################################################################
 
-    @property
-    def transition_matrix(self):
-        return self._transition_matrix
-    @transition_matrix.setter
-    def transition_matrix(self, value):
-        self._transition_matrix = value
+    def _counts_default(self):
+        if self.handle is not None:
+            return scipy.sparse.csr_matrix((self.handle.root.counts_data,
+                self.handle.root.counts_indices, self.handle.root.counts_indptr),
+                shape=self.handle.root.counts_shape)
+        return None
 
-    @property
-    def trajectories(self):
-        return self._trajectories
-    @trajectories.setter
-    def trajectories(self, value):
-        self._trajectories = value
+    def _reversible_counts_default(self):
+        if self.handle is not None:
+            return scipy.sparse.csr_matrix((self.handle.root.reversible_counts_data,
+                self.handle.root.reversible_counts_indices, self.handle.root.reversible_counts_indptr),
+                shape=self.handle.root.reversible_counts_shape)
+        return None
+
+    def _transition_matrix_default(self):
+        if self.handle is not None:
+            return scipy.sparse.csr_matrix((self.handle.root.transition_matrix_data,
+                self.handle.root.transition_matrix_indices, self.handle.root.transition_matrix_indptr),
+                shape=self.handle.root.transition_matrix_shape)
+        return None
+
+    def _populations_default(self):
+        if self.handle is not None:
+            return self.handle.root.populations[:]
+        return None
+
+    def _mapping_default(self):
+        if self.handle is not None:
+            return self.handle.root.mapping[:]
+        return None
+
+    def _assignments_default(self):
+        if self.handle is not None:
+            return self.handle.root.assignments[:]
+        return None
+
+    def _generator_indices_default(self):
+        if self.handle is not None:
+            return self.handle.root.generator_indices[:]
+        return None
+
+    def _traj_filenames_default(self):
+        if self.handle is not None:
+            return self.handle.root.traj_filenames[:]
+        return None
+
+    def _assignments_stride_default(self):
+        if self.handle is not None:
+            return int(self.handle.root.assignments_stride[0])
+
+    def _lag_time_default(self):
+        if self.handle is not None:
+            return int(self.handle.root.lag_time[0])
+
+    ##########################################################################
+    # END Default methods
+    ##########################################################################
+
+
+    def _generator_indices_changed(self, old, new):
+        assert new.ndim == 2, 'generator indices must be 2d'
+        assert new.shape[1] == 2, 'generator indices must have 2 columns'

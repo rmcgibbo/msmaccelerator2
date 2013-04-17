@@ -1,7 +1,5 @@
 """
 Code for the server's interaction with OpenMM
-
-
 """
 ##############################################################################
 # Imports
@@ -14,10 +12,9 @@ from simtk.openmm import Context, Platform, XmlSerializer, VerletIntegrator
 # Classes
 ##############################################################################
 
+
 class OpenMMStateBuilder(object):
     """Build an OpenMM "state" that can be sent to a device to simulate.
-
-
     """
     def __init__(self, system, integrator=None):
 
@@ -36,15 +33,20 @@ class OpenMMStateBuilder(object):
             integrator = VerletIntegrator(2*femtoseconds)
         self.context = Context(system, integrator, Platform.getPlatformByName('Reference'))
 
-    def build(self, positions):
-        """Create a serialized state from a set of positions
+    def build(self, trajectory):
+        """Create a serialized state from the first frame in a trajectory
 
         Parameteters
         ------------
-        positions : np.ndarray or list of vec3
-            The positions to set into the state
+        trajectory : mdtraj.trajectory.Trajectory
+            The trajectory to take the frame from. We'll use both the the
+            positions and the box vectors (if you're using periodic boundary
+            conditions)
         """
-        self.context.setPositions(positions)
+        if trajectory.box is not None:
+            self.context.setPeriodicBoxVectors(*trajectory.openmm_boxes(0))
+
+        self.context.setPositions(trajectory.openmm_positions(0))
         state = self.context.getState(getPositions=True, getVelocities=True,
                                       getForces=True, getEnergy=True,
                                       getParameters=True, enforcePeriodicBox=True)

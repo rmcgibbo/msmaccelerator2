@@ -1,16 +1,14 @@
 """
-Simple clustering process. Builds an MSM and saves it to disk.
+ZMQ device that builds an MSM and saves it to disk.
 """
 #############################################################################
 # Imports
 ##############################################################################
 
-import os
 import numpy as np
 
 # mdtraj
 import mdtraj.trajectory
-# msmbuilder
 import msmbuilder.io
 import msmbuilder.metrics
 import msmbuilder.Trajectory
@@ -18,6 +16,7 @@ import msmbuilder.MSMLib
 import msmbuilder.clustering
 
 # local
+from ..core.markovstatemodel import MarkovStateModel
 from ..core.device import Device
 
 from IPython.utils.traitlets import Unicode, Int, Float, Enum, Bool
@@ -94,36 +93,21 @@ class Modeler(Device):
         # build the MSM
         counts, rev_counts, t_matrix, populations, mapping =  self.build_msm(assignments)
 
-        # TODO: add transparent saving/loading of CSR matricies to msmbuilder.io
         # save the results to disk
-        msmbuilder.io.saveh(content.output.path,
-                            # counts matrix (CSR)
-                            counts_data=counts.data,
-                            counts_indices=counts.indices,
-                            counts_intptr=counts.indptr,
-                            counts_shape=np.array([counts.shape]),
-                            # rev counts matrix (CSR)
-                            rev_counts_data=rev_counts.data,
-                            rev_counts_indices=rev_counts.indices,
-                            rev_counts_indptr=rev_counts.indptr,
-                            rev_counts_shape=np.array([rev_counts.shape]),
-                            # transition matrix (CSR)
-                            t_matrix_data=t_matrix.data,
-                            t_matrix_indices=t_matrix.indices,
-                            t_matrix_indptr=t_matrix.indptr,
-                            t_matrix_shape=np.array([t_matrix.shape]),
-                            populations=populations,
-                            mapping=mapping,
-                            assignments=assignments,
-                            assignments_stride=np.array([self.stride]),
-                            lag_time=np.array([self.lag_time]),
-                            traj_fns=np.array(content.traj_fns))
+        msm = MarkovStateModel(counts=counts, reversible_counts=rev_counts,
+            transition_matrix=t_matrix, populations=populations, mapping=mapping,
+            generator_indices=generator_indices, traj_filenames=content.traj_fns,
+            assignments_stride=self.stride, lag_time=self.lag_time)
+        msm.save(content.output.path)
 
         # tell the server that we're done
         self.send_message(msg_type='modeler_done', content={
-            'status': 'success'
+            'status': 'success',
+            'output': {
+                'protocol': 'localfs',
+                'path': content.output.path
+            },
         })
-
 
     def load_trajectories(self, traj_fns):
         """Load up the trajectories, taking into account both the stride and
@@ -137,7 +121,7 @@ class Modeler(Device):
             # the coordinate array into shim for the msmbuilder clustering
             # code that wants the trajectory to act like a dict with the XYZList
             # key.
-            t =  mdtraj.trajectory.load(traj_fn)
+            t = mdtraj.trajectory.load(traj_fn)
             t2 = ShimTrajectory(t.xyz[::self.stride, atom_indices, :])
 
             trajs.append(t2)
@@ -146,7 +130,6 @@ class Modeler(Device):
             raise ValueError('No trajectories found!')
 
         return trajs
-
 
     def cluster(self, trajectories):
         """Cluster the trajectories into microstates.
@@ -207,6 +190,7 @@ class Modeler(Device):
 # Utilities
 ############################################################################
 
+
 def reindex_list(indices, sublist_lengths):
     """Given a list of indices giving the position of items in a long list,
     which actually composed of a number of short lists concatenated together,
@@ -233,6 +217,7 @@ def reindex_list(indices, sublist_lengths):
 
         output[ii] = k, residual
     return output
+
 
 class ShimTrajectory(dict):
     """This is a dict that can be used to interface some xyz coordinates

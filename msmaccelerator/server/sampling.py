@@ -1,18 +1,175 @@
-# work in progess. maybe put some adaptive sampling code here?s
+"""Adaptive sampling code. This module contains classes that are capable
+of sampling from some kind of distribution and returning a starting structure
+to the server that can be sent to a waiting client to propagate.
+"""
+##############################################################################
+# Imports
+##############################################################################
 
+# 3rd party
 import numpy as np
-from mdtraj import trajectory
+import mdtraj.trajectory
+from IPython.config import Configurable
+from IPython.utils.traitlets import Instance, Float, Unicode
+
+# ours
+from ..core.traitlets import CNumpyArray
+from ..core.markovstatemodel import MarkovStateModel
+
+##############################################################################
+# Abstract Classes
+##############################################################################
 
 
-class AdaptiveSampler(object):
-    def __init__(self):
-        self._model = None
+class BaseSampler(Configurable):
+    """Adaptive sampler that simply returns a given initial structure.
 
-    def set_model(self):
-        self._model = model
+    This can be used for the very first round when you have no data, and
+    also as a base class for the other samplers
+    """
+    log = Instance('logging.Logger')
+    statebuilder = Instance('msmaccelerator.server.openmm.OpenMMStateBuilder')
+    seed_structures = Unicode(config=True, help='''Trajectory file giving the
+        initial structures that you want to sample from. This should be a
+        single PDB or other type of loadable trajectory file. These structures
+        will only be used in the beginning, before we have an actual MSM
+        to use.''')
 
-    def choose_structure(self):
-        weights = self._model.populations
-        state_index = np.where(np.random.multinomial(1, weights) == 1)[0][0]
+    def sample_xml_state(self):
+        self.log.error(self.seed_structures)
+        """Get a XML serialized state to send to the client to propage
 
-        return self._model.generators[state_index]
+        This is the main external interface by which the server interacts
+        with the adaptive sampler.
+
+        Returns
+        -------
+        serialized_state : string
+            A string of XML containing a serialized reprenation of the state
+            to send to a client to simulate.
+        """
+        return self.statebuilder.build(self.select())
+
+    def select(self):
+        """Use adaptive sample algorithm to select a simulation frame
+
+        This is the main method that should be overriden by Samplers if they
+        want to implement a new adaptive sampling strategy Our implementation
+        in the this base class just selects from the uniform distribution over
+        the seed structures.
+
+        Returns
+        -------
+        frame : mdtraj.Trajectory
+            This method should return a Trajectory object, whose first
+            frame contains the positions (and box vectors) that you want
+            to send to the client to simulate.
+        """
+        if self.seed_structures == '':
+            self.log.error('BaseSampler Error: I\'m trying to sample from '
+                           'seed structures, but it\'s an empty string!')
+        # if the seed structures trajectory is big and supports random
+        # access, this might not be the most efficient, since we're loading
+        # the whole trajectory just to get a single frame.
+        traj = mdtraj.trajectory.load(self.seed_structures)
+        frame = np.random.randint(len(traj))
+
+        self.log.info('Sampling from the seed structures, frame %d' % frame)
+        return traj[frame]
+
+
+class CentroidSampler(BaseSampler):
+    """Adaptive sampler that uses the centroids/"generators"" of the states
+    to choose amongst, with a multinomial distibition.
+
+    This class DOES NOT actually contain a method to *set* the weights. That
+    is done by subclasses. See, for example, CountsSampler, that sets the
+    weights using the counts.
+
+    """
+    model = Instance('msmaccelerator.core.markovstatemodel.MarkovStateModel')
+    model_fn = Unicode(help='''Filename of the markov model. This is a
+        convenience handle. Once it's set, we'll load up the model internally.
+        Note that this is not a configurable option, because by default it's
+        setup within the AdaptiveServer to look for the most recent model.''')
+    weights = CNumpyArray(help='''These are the weights of a multinomial distribution
+        over the microstates that we select from when asked to select a new
+        configuration to sample from. Different subclasses of this class
+        can use different schemes to set the weights when a new model is
+        registered by overriding the instance method _model_changed()''')
+
+    def _model_fn_changed(self, old, new):
+        if self.model is not None:
+            # lets try to explicitly close its handle
+            self.model.close()
+
+        self.model = MarkovStateModel.load(new)
+        self.log.info('[CentroidSampler] New model, "%s", loaded', new)
+
+    def _weights_changed(self, old, new):
+        # keey the cumulative_weights updated to the current value
+        # of the weights
+        self.cumulative_weights = np.cumsum(new)
+        np.testing.assert_almost_equal(self.cumulative_weights[-1], 1,
+                                      err_msg='The weights don\'t sum to 1')
+        self.log.info('[CentroidSampler] New sampling weights set!')
+
+
+    def select(self):
+        """Select a simulation frame from amongst the state centroids, choosing
+        randomly from a multinomial distribution.
+
+        Returns
+        -------
+        frame : mdtraj.Trajectory
+            This method retursn a Trajectory object, whose first frame
+            contains the positions (and box vectors) that you want to send to
+            the client to simulate.
+        """
+
+        if self.model is None or self.weights is None or len(self.weights) == 0:
+            # fall back to the base sampler if we haven't seen a MSM yet
+            self.log.error('CentroidSampler is falling back to BaseSampler '
+                           'to get a structure, because no model or weights '
+                           'are registered.')
+            return super(CentroidSampler, self).select()
+
+        # Find the index of the first weight over a random value.
+        index = np.sum(self.cumulative_weights < np.random.rand())
+        traj, frame = self.model.generator_indices[index]
+        filename = self.model.traj_filenames[traj]
+
+        # load up the generator from disk
+        traj = mdtraj.trajectory.load_hdf(filename, frame=frame)
+
+        self.log.info('Sampling from a multinimial. I choose '
+                      'traj="%s", frame=%s', filename, frame)
+        return traj
+
+
+##############################################################################
+# Concrete Classes
+##############################################################################
+
+
+class CountsSampler(CentroidSampler):
+    beta = Float(1, config=True, help="""Temperature factor that controls the
+        level of exploration vs. refinement. When beta = 0 (high temp), we do
+        full exploration, putting simulations where few counts have been seen.
+        When beta = 1 (room temp), we do uniform sampling from the microstate,
+        with no preference based on their counts. When beta > 1 (low  temp),
+        we do refinement, such that we focus on microstates with a high number
+        of counts. At beta = 2, we choose microstates proportional to our
+        estimate of their current equilibrium propbability. The explicit
+        formula used is:
+        Prob( choose state i ) ~ \sum_j C_{ij} ^{ beta - 1 }""")
+
+    # TODO: Should we be using the reversible counts or the unsymmetrized counts?
+
+    def _model_changed(self, old, new):
+        counts_per_state = np.array(self.model.counts.sum(axis=1)).flatten() + 10.**-8
+        w = np.power(counts_per_state, self.beta - 1.0)
+
+        self.weights = w / np.sum(w)
+        self.log.info('[CountsSampler] Beta=%s. Setting multinomial weights, %s',
+                      self.beta, self.weights)

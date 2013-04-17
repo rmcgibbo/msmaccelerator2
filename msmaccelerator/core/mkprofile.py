@@ -1,3 +1,7 @@
+"""Command line script (subcommand of the main script) that creates
+an empty configuration file for you
+"""
+
 import os
 import sys
 

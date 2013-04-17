@@ -1,11 +1,10 @@
-"""Base class for ZMQ servers
+"""Base class for ZMQ server app.
 """
 ##############################################################################
 # Imports
 ##############################################################################
 
 import os
-import warnings
 import yaml
 import zmq
 import uuid
@@ -91,10 +90,10 @@ class BaseServer(App):
             self.mongo_url = os.environ.get('MONGO_URL', '')
 
         if self.mongo_url == '':
-            warnings.warn('Could not connect to database. You need to '
+            self.log.error('Could not connect to database. You need to '
                 'add an env variable MONGO_URL with the url for the mongo '
                 'instance. If you\'re running you own mongo server, then '
-                'this will be some kind of localhost url. Its recommended '
+                'this will be some kind of localhost url. It\'s recommended '
                 'instead that you use a cloud Database-as-a-service like '
                 'MongoHQ or MongoLab. They will give you a url to connect to'
                 'your db. See http://blog.mongohq.com/blog/2012/02/20/connecting-to-mongohq/ '
@@ -107,7 +106,7 @@ class BaseServer(App):
             # this gets the name of the db from the mongo url
             # we should do more validation here
             self.db_name = self.mongo_url.split('/')[-1]
-            print 'PARSED DB NAME:', self.db_name
+            self.log.info('Parsed mongodb DB name: %s', self.db_name)
 
         self.db = getattr(c, self.db_name)  # database name
         self.messages_collection = getattr(self.db, 'messages' + self.collection_suffix)
@@ -136,7 +135,7 @@ class BaseServer(App):
         For details on the messaging protocol, refer to message.py
         """
         msg = pack_message(msg_type, self.uuid, content)
-        print 'SENDING', msg
+        self.log.info('SENDING: %s', msg)
         if self.db is not None:
             db_entry = msg.copy()
             db_entry['client_id'] = client_id
@@ -163,13 +162,14 @@ class BaseServer(App):
         # instead of unicode, since you can't send unicode over zmq
         # since json is a subset of yaml, this works
         msg = Message(yaml.load(raw_msg))
-        print 'RECEIVING', msg
+        self.log.info('RECEIVING: %s', msg)
 
         if self.db is not None:
             self.messages_collection.save(msg.copy())
 
         try:
             responder = getattr(self, msg.header.msg_type)
-            responder(msg.header, msg.content)
         except AttributeError:
-            print 'ERROR: RESPONDER NOT FOUND FOR MESSAGE %s' % msg.header.msg_type
+            self.log.critical('RESPONDER NOT FOUND FOR MESSAGE: %s', msg.header.msg_type)
+
+        responder(msg.header, msg.content)

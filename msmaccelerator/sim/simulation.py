@@ -1,25 +1,16 @@
-"""
-Simple simulation process. Two dimensional dynamics on a lattice.
-
+"""OpenMM simulation device. We connect to server, request a starting
+structure, and then propagate.
 """
 #############################################################################
 # Imports
 ##############################################################################
 
-import os
 from IPython.utils.traitlets import Unicode, Int, Instance, Bool
-
+from mdtraj.reporters import HDF5Reporter
 from simtk.openmm import XmlSerializer
 from simtk.openmm.app import (Simulation, PDBFile)
 
 # local
-try:
-    from mdtraj.reporters import HDF5Reporter
-except ImportError:
-    print 'You need the HDF5Reporter in the mdtraj package'
-    print 'current its in a PR, here https://github.com/rmcgibbo/mdtraj/pull/12'
-    raise
-
 from .reporters import CallbackReporter
 from ..core.device import Device
 
@@ -115,7 +106,7 @@ class Simulator(Device):
 
         # run dynamics!
         simulation.step(self.number_of_steps)
-        
+
         for reporter in simulation.reporters:
             # explicitly delete the reporters so that any open file handles
             # are closed.
