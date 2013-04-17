@@ -1,8 +1,4 @@
-"""
-Container class to hold a MSM, backed by an HDF5 file on disk.
-This is still a work in progress. See the github issue I opened on this for
-discussion
-https://github.com/rmcgibbo/msmaccelerator2/issues/8
+"""Container class to hold a MSM, backed by an HDF5 file on disk.
 """
 ##############################################################################
 # Imports
