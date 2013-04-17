@@ -11,6 +11,8 @@ and I will try to improve the docstrings.
 ##############################################################################
 # Imports
 ##############################################################################
+# stdlib
+import os
 
 # 3rd party
 import numpy as np
@@ -35,7 +37,7 @@ class BaseSampler(Configurable):
     """
     log = Instance('logging.Logger')
     statebuilder = Instance('msmaccelerator.server.openmm.OpenMMStateBuilder')
-    seed_structures = Unicode(config=True, help='''Trajectory file giving the
+    seed_structures = Unicode('ala5.pdb', config=True, help='''Trajectory file giving the
         initial structures that you want to sample from. This should be a
         single PDB or other type of loadable trajectory file. These structures
         will only be used in the beginning, before we have an actual MSM
@@ -71,9 +73,12 @@ class BaseSampler(Configurable):
             frame contains the positions (and box vectors) that you want
             to send to the client to simulate.
         """
-        if self.seed_structures == '':
-            self.log.error('BaseSampler Error: I\'m trying to sample from '
-                           'seed structures, but it\'s an empty string!')
+        if not os.path.exists(self.seed_structures):
+            raise ValueError("I couldn't find the seed_structures file "
+                "on the local filesystem. I need this configurable "
+                "to know what starting conditions to send to the sampler, "
+                "since no MSMs have been build")
+
         # if the seed structures trajectory is big and supports random
         # access, this might not be the most efficient, since we're loading
         # the whole trajectory just to get a single frame.
@@ -187,6 +192,11 @@ class CountsSampler(CentroidSampler):
         is changed, this callback will be triggered. We use this hook to set
         the weights, which will be used by the superclass to randomly sample
         the generators with."""
+
+        # TODO: If in the future we start changing beta asynchronously, then
+        # we should also make sure that this code gets called on _beta_changed
+        # as well
+
         counts_per_state = np.array(self.model.counts.sum(axis=1)).flatten() + 10.**-8
         w = np.power(counts_per_state, self.beta - 1.0)
 

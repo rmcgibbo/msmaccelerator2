@@ -135,7 +135,7 @@ class BaseServer(App):
         For details on the messaging protocol, refer to message.py
         """
         msg = pack_message(msg_type, self.uuid, content)
-        self.log.info('SENDING: %s', msg)
+        self.log.info('SENDING MESSAGE: %s', msg)
         if self.db is not None:
             db_entry = msg.copy()
             db_entry['client_id'] = client_id
@@ -162,7 +162,7 @@ class BaseServer(App):
         # instead of unicode, since you can't send unicode over zmq
         # since json is a subset of yaml, this works
         msg = Message(yaml.load(raw_msg))
-        self.log.info('RECEIVING: %s', msg)
+        self.log.info('RECEIVING MESSAGE: %s', msg)
 
         if self.db is not None:
             self.messages_collection.save(msg.copy())
