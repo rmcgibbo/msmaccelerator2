@@ -28,7 +28,7 @@ from IPython.utils.traitlets import Unicode, Int, Float, Enum, Bool
 
 class Modeler(Device):
     name = 'model'
-    path = 'msmaccelerator.model.clusterer.Modeler'
+    path = 'msmaccelerator.model.modeler.Modeler'
     short_description = 'Run the modeler, building an MSM on the available data'
     long_description = '''This device will connect to the msmaccelerator server,
         request the currently available data and build an MSM. That MSM will be

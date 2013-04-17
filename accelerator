@@ -2,11 +2,11 @@
 
 # import all of the apps
 
-from msmaccelerator.model.clusterer import Modeler
+from msmaccelerator.model.modeler import Modeler
 from msmaccelerator.server.adaptiveserver import AdaptiveServer
 
 from msmaccelerator.core.app import RootApplication
-from msmaccelerator.sim.simulation import Simulator
+from msmaccelerator.simulate.simulation import Simulator
 from msmaccelerator.core.mkprofile import MKProfile
 
 
