@@ -1,6 +1,12 @@
 """Adaptive sampling code. This module contains classes that are capable
 of sampling from some kind of distribution and returning a starting structure
 to the server that can be sent to a waiting client to propagate.
+
+Note: this class uses a lot of traits programming. It can look a little
+odd, since there are some automatically triggered callbacks, but it makes the
+code pretty easy to use. If you don't understand what's going on, you should
+try reading about enthought traits / ipython traitlets, or ask me (@rmcgibbo),
+and I will try to improve the docstrings.
 """
 ##############################################################################
 # Imports
@@ -99,6 +105,9 @@ class CentroidSampler(BaseSampler):
         registered by overriding the instance method _model_changed()''')
 
     def _model_fn_changed(self, old, new):
+        """When the self.model_fn trait is changed, this method gets called
+        automatically. We use this hook to load up the model from the supplied
+        filename. This is a convenient way of keeping things in sync."""
         if self.model is not None:
             # lets try to explicitly close its handle
             self.model.close()
@@ -107,7 +116,11 @@ class CentroidSampler(BaseSampler):
         self.log.info('[CentroidSampler] New model, "%s", loaded', new)
 
     def _weights_changed(self, old, new):
-        # keey the cumulative_weights updated to the current value
+        """When self.weights traits gets changed, this method gets called
+        automatically. We use this hook to set the attribute
+        self.cumulative_weights, which is needed by select but shouldn't
+        be recomputed."""
+        # keep the cumulative_weights updated to the current value
         # of the weights
         self.cumulative_weights = np.cumsum(new)
         np.testing.assert_almost_equal(self.cumulative_weights[-1], 1,
@@ -118,6 +131,9 @@ class CentroidSampler(BaseSampler):
     def select(self):
         """Select a simulation frame from amongst the state centroids, choosing
         randomly from a multinomial distribution.
+
+        Note that we're choosing based on `self.weights`, which should be set
+        by a subclass!
 
         Returns
         -------
@@ -167,6 +183,10 @@ class CountsSampler(CentroidSampler):
     # TODO: Should we be using the reversible counts or the unsymmetrized counts?
 
     def _model_changed(self, old, new):
+        """When the MarkovStateModel that this class is pointing to, self.model,
+        is changed, this callback will be triggered. We use this hook to set
+        the weights, which will be used by the superclass to randomly sample
+        the generators with."""
         counts_per_state = np.array(self.model.counts.sum(axis=1)).flatten() + 10.**-8
         w = np.power(counts_per_state, self.beta - 1.0)
 
