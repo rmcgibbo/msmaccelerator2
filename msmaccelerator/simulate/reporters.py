@@ -6,6 +6,7 @@ printing it to stdout.
 # Imports
 ##############################################################################
 
+from __future__ import division
 import os
 # note this code requires openmm 5.1, in which StateDataReporter was
 # refactored for easier subclassing
@@ -17,9 +18,10 @@ from simtk.openmm.app import StateDataReporter
 
 
 class CallbackReporter(StateDataReporter):
-    def __init__(self, reportCallback, reportInterval, **kwargs):
+    def __init__(self, reportCallback, reportInterval, total_steps=None, **kwargs):
         super(CallbackReporter, self).__init__(os.devnull, reportInterval, **kwargs)
 
+        self.total_steps = total_steps
         self.reportCallback = reportCallback
         self.headers = None
 
@@ -36,4 +38,10 @@ class CallbackReporter(StateDataReporter):
         values = self._constructReportValues(simulation, state)
 
         content = dict(zip(self.headers, values))
+
+        if self.total_steps is not None and 'Step' in content:
+            progress = (100 * content['Step'] / self.total_steps)
+            content['Progress (%s)'] = '%.1f%%' % progress
+            
+
         self.reportCallback(content)

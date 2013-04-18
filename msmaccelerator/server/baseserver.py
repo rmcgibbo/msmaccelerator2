@@ -161,11 +161,12 @@ class BaseServer(App):
         # using the PyYaml loader is a hack force regular strings
         # instead of unicode, since you can't send unicode over zmq
         # since json is a subset of yaml, this works
-        msg = Message(yaml.load(raw_msg))
+        msg_dict = yaml.load(raw_msg)
+        msg = Message(msg_dict)
         self.log.info('RECEIVING MESSAGE: %s', msg)
 
         if self.db is not None:
-            self.messages_collection.save(msg.copy())
+            self.messages_collection.save(msg_dict)
 
         try:
             responder = getattr(self, msg.header.msg_type)

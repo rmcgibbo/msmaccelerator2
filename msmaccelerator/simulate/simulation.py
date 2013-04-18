@@ -5,7 +5,7 @@ structure, and then propagate.
 # Imports
 ##############################################################################
 
-from IPython.utils.traitlets import Unicode, Int, Instance, Bool
+from IPython.utils.traitlets import Unicode, CInt, Instance, Bool
 from mdtraj.reporters import HDF5Reporter
 from simtk.openmm import XmlSerializer
 from simtk.openmm.app import (Simulation, PDBFile)
@@ -36,11 +36,11 @@ class Simulator(Device):
         Path to the XML file containing the OpenMM Integrator to use''')
     integrator = Instance('simtk.openmm.openmm.Integrator')
 
-    number_of_steps = Int(10000, config=True, help='''
+    number_of_steps = CInt(10000, config=True, help='''
         Number of steps of dynamics to do''')
 
-    report_interval = Int(1000, config=True, help='''
-        Interval at which to report positions to a file, in units of steps''')
+    report_interval = CInt(1000, config=True, help='''
+        Interval at which to save positions to a disk, in units of steps''')
 
     minimize = Bool(True, config=True, help='''Do local energy minimization on
         the configuration that's passed to me, before running dynamics''')
@@ -105,6 +105,7 @@ class Simulator(Device):
         self.add_reporters(simulation, content.output.path)
 
         # run dynamics!
+        self.log.info('Starting dynamics')
         simulation.step(self.number_of_steps)
 
         for reporter in simulation.reporters:
@@ -173,8 +174,8 @@ class Simulator(Device):
             print report
 
         callback_reporter = CallbackReporter(zmq_reporter_callback,
-                self.report_interval, step=True, potentialEnergy=True,
-                temperature=True)
+            self.report_interval, step=True, potentialEnergy=True,
+            temperature=True, time=True, total_steps=self.number_of_steps)
         h5_reporter = HDF5Reporter(outfn, self.report_interval,
                 n_expected_frames=int(self.number_of_steps/self.report_interval))
 
