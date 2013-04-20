@@ -112,7 +112,7 @@ class BaseServer(App):
         self.messages_collection = getattr(self.db, 'messages' + self.collection_suffix)
 
 
-    def send_message(self, client_id, msg_type, content):
+    def send_message(self, client_id, msg_type, content=None):
         """Send a message out to a client
 
         Parameters
@@ -134,6 +134,9 @@ class BaseServer(App):
         -----
         For details on the messaging protocol, refer to message.py
         """
+        if content is None:
+            content = {}
+
         msg = pack_message(msg_type, self.uuid, content)
         self.log.info('SENDING MESSAGE: %s', msg)
         if self.db is not None:
@@ -142,7 +145,19 @@ class BaseServer(App):
             self.messages_collection.save(db_entry)
 
         self._stream.send(client_id, zmq.SNDMORE)
+        self._stream.send('', zmq.SNDMORE)
         self._stream.send_json(msg)
+
+    def _validate_msg_dict(self, msg_dict):
+        if 'header' not in msg_dict:
+            raise ValueError('msg does not contain "header"')
+        if 'content' not in msg_dict:
+            raise ValueError('msg does not contain "content"')
+        if 'sender_id' not in msg_dict['header']:
+            raise ValueError('msg header does not contain "sender_id"')
+        if 'msg_type' not in msg_dict['header']:
+            raise ValueError('msg header does not contain "msg_type"')
+
 
     def _dispatch(self, frames):
         """Callback that responds to new messages on the stream
@@ -157,11 +172,24 @@ class BaseServer(App):
         messages : list
             A list of messages that have arrived
         """
-        client, raw_msg = frames
+        if not len(frames) == 3:
+            self.log.error('invalid message received. messages are expected to contain only three frames: %s', str(frames))
+
+        client, _, raw_msg = frames
         # using the PyYaml loader is a hack force regular strings
         # instead of unicode, since you can't send unicode over zmq
         # since json is a subset of yaml, this works
         msg_dict = yaml.load(raw_msg)
+
+        try:
+            self._validate_msg_dict(msg_dict)
+        except ValueError:
+            # if we recieve an invalid message, we log it out error stream
+            # and then return from this function, so it won't take the server
+            # down
+            self.log.exception('Invalid message: %s', msg_dict)
+            return
+
         msg = Message(msg_dict)
         self.log.info('RECEIVING MESSAGE: %s', msg)
 
@@ -171,6 +199,8 @@ class BaseServer(App):
         try:
             responder = getattr(self, msg.header.msg_type)
         except AttributeError:
-            self.log.critical('RESPONDER NOT FOUND FOR MESSAGE: %s', msg.header.msg_type)
+            self.log.critical('RESPONDER NOT FOUND FOR MESSAGE: %s',
+                              msg.header.msg_type)
 
         responder(msg.header, msg.content)
+

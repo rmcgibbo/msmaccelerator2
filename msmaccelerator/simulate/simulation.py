@@ -82,6 +82,7 @@ class Simulator(Device):
 
         We run some OpenMM dynamics, and then send back the results.
         """
+        self.log.info('Setting up simulation')
         state, topology = self.deserialize_input(content)
 
         simulation = Simulation(topology, self.system, self.integrator)
@@ -114,7 +115,7 @@ class Simulator(Device):
             del reporter
 
         # tell the master that I'm done
-        self.send_message(msg_type='simulation_done', content={
+        self.send_recv(msg_type='simulation_done', content={
             'status': 'success',
         })
 
@@ -164,16 +165,11 @@ class Simulator(Device):
 
     def add_reporters(self, simulation, outfn):
         "Add reporters to a simulation"
-        def zmq_reporter_callback(report):
-            """Callback for CallbackReporter to publish the report back
-            to the server"""
-            self.send_message(msg_type='simulation_status', content={
-                'status': 'inprogress',
-                'report': report
-            })
-            print report
+        def reporter_callback(report):
+            """Callback for processing reporter output"""
+            self.log.info(report)
 
-        callback_reporter = CallbackReporter(zmq_reporter_callback,
+        callback_reporter = CallbackReporter(reporter_callback,
             self.report_interval, step=True, potentialEnergy=True,
             temperature=True, time=True, total_steps=self.number_of_steps)
         h5_reporter = HDF5Reporter(outfn, self.report_interval,

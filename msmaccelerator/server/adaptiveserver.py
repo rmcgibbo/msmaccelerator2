@@ -151,15 +151,17 @@ class AdaptiveServer(BaseServer):
         assert content.output.protocol == 'localfs'
         # register the newest model with the sampler!
         self.sampler.model_fn = content.output.path
+        self.send_message(header.sender_id, 'acknowledge_receipt')
 
     def simulation_status(self, header, content):
         """Called when the simulation reports its status.
         """
-        pass
+        self.send_message(header.sender_id, 'acknowledge_receipt')
 
     def simulation_done(self, header, content):
         """Called when a simulation finishes"""
-        pass
+        self.send_message(header.sender_id, 'acknowledge_receipt')
+
 
     ########################################################################
     # END HANDLERS FOR INCOMMING MESSAGES

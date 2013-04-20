@@ -53,9 +53,13 @@ class Device(App):
     aliases = dict(zmq_port='Device.zmq_port',
                    zmq_url='Device.zmq_url')
 
+    @property
+    def zmq_connection_string(self):
+        return 'tcp://%s:%s' % (self.zmq_url, self.zmq_port)
+
     def start(self):
-        ctx = zmq.Context()
-        self.socket = ctx.socket(zmq.DEALER)
+        self.ctx = zmq.Context()
+        self.socket = self.ctx.socket(zmq.REQ)
         # we're using the uuid to set the identity of the socket
         # AND we're going to put it explicitly inside of the header of
         # the messages we send. Within the actual bytes that go over the wire,
@@ -65,12 +69,13 @@ class Device(App):
         # itself to be "complete", insted of having the sender in a separate
         # data structure.
         self.socket.setsockopt(zmq.IDENTITY, self.uuid)
-        self.socket.connect('tcp://%s:%s' % (self.zmq_url, self.zmq_port))
+        self.socket.connect(self.zmq_connection_string)
 
-        # send the "here i am message"
-        self.send_message(msg_type='register_%s' % self.__class__.__name__)
-
-        msg = self.recv_message()
+        # send the "here i am message" to the server, and receive a response
+        # we're using a "robust" send/recv pattern, basically retrying the
+        # request a fixed number of times if no response is heard from the
+        # server
+        msg = self.send_recv(msg_type='register_%s' % self.__class__.__name__)
         self.on_startup_message(msg)
 
     def on_startup_message(self, msg_type, msg):
@@ -80,7 +85,15 @@ class Device(App):
         raise NotImplementedError('This method should be overriden in a device subclass')
 
     def send_message(self, msg_type, content=None):
-        """Send a message to the server
+        """Send a message to the server asynchronously.
+
+        Since we're using the request/reply pattern, after calling send
+        you need to call recv to get the server's response. Consider instead
+        using the send_recv method instead
+
+        See Also
+        --------
+        send_recv
         """
         if content is None:
             content = {}
@@ -91,8 +104,50 @@ class Device(App):
         """Receive a message from the server.
 
         Note, this methos is not async -- it blocks the device until
-        the serve delivers a message
+        the server delivers a message
         """
         raw_msg = self.socket.recv()
         msg = yaml.load(raw_msg)
         return Message(msg)
+
+
+    def send_recv(self, msg_type, content=None, timeout=3, retries=3):
+        """Send a message to the server and receive a response
+
+        This method inplementes the "Lazy-Pirate pattern" for
+        relaible request/reply flows described in the ZeroMQ book.
+
+        Parameters
+        ----------
+        msg_type : str
+            The type of the message to send. This is an essential
+            part of the MSMAccelerator messaging protocol.
+        content : dict
+            The contents of the message to send. This is an essential
+            part of the MSMAccelerator messaging protocol.
+        timeout : int, float, default=3
+            The timeout, in seconds, to wait for a response from the
+            server.
+        retries : int, default=3
+            If a response from the server is not received within `timeout`
+            seconds, we'll retry sending our payload at most `retries`
+            number of times. After that point, if no return message has
+            been received, we'll throw an IOError.
+        """
+        timeout_ms = timeout * 1000
+
+        poller = zmq.Poller()
+        for i in range(retries):
+            self.send_message(msg_type, content)
+            poller.register(self.socket, zmq.POLLIN)
+            if poller.poll(timeout_ms):
+                return self.recv_message()
+            else:
+                self.log.error('No response received from server on'
+                               'msg_type=%s. Retrying...', msg_type)
+                poller.unregister(self.socket)
+                self.socket.close()
+                self.socket = self.ctx.socket(zmq.REQ)
+                self.socket.connect(self.zmq_connection_string)
+
+        raise IOError('Network timeout. Server is unresponsive.')

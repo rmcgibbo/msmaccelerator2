@@ -101,7 +101,7 @@ class Modeler(Device):
         msm.save(content.output.path)
 
         # tell the server that we're done
-        self.send_message(msg_type='modeler_done', content={
+        self.send_recv(msg_type='modeler_done', content={
             'status': 'success',
             'output': {
                 'protocol': 'localfs',
