@@ -47,6 +47,7 @@ $ pip install pyzmq     # messaging framework
 $ pip install ipython   # configration framework
 $ pip install pyyaml    # message serialization
 $ pip install pymongo   # database interaction
+$ pip install tornado   # server event loop
 # Code for loading and saving trajectories lives in a different
 # package called MDTraj. You can install that with the following
 $ pip install git+git://github.com/rmcgibbo/mdtraj.git
