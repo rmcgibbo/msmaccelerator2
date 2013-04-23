@@ -7,7 +7,7 @@ structure, and then propagate.
 
 from IPython.utils.traitlets import Unicode, CInt, Instance, Bool, Enum
 from mdtraj.reporters import HDF5Reporter
-from simtk.openmm import XmlSerializer
+from simtk.openmm import XmlSerializer, Platform
 from simtk.openmm.app import (Simulation, PDBFile)
 
 # local
@@ -50,7 +50,7 @@ class Simulator(Device):
 
     platform = Enum(['Reference', 'CUDA', 'OpenCL'], default_value='CUDA',
         config=True, help='''The OpenMM platform on which to run the simulation''')
-    device_index = CInt(1, config=True, help='''OpenMM device index for CUDA or
+    device_index = CInt(0, config=True, help='''OpenMM device index for CUDA or
         OpenCL platforms. This is used to select which GPU will be used on a
         multi-gpu system. This option is ignored on reference platform''')
 
