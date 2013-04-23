@@ -5,7 +5,7 @@ structure, and then propagate.
 # Imports
 ##############################################################################
 
-from IPython.utils.traitlets import Unicode, CInt, Instance, Bool
+from IPython.utils.traitlets import Unicode, CInt, Instance, Bool, Enum
 from mdtraj.reporters import HDF5Reporter
 from simtk.openmm import XmlSerializer
 from simtk.openmm.app import (Simulation, PDBFile)
@@ -48,6 +48,13 @@ class Simulator(Device):
     random_initial_velocities = Bool(True, config=True, help='''Choose
         random initial velocities from the Maxwell-Boltzmann distribution''')
 
+    platform = Enum(['Reference', 'CUDA', 'OpenCL'], default_value='CUDA',
+        config=True, help='''The OpenMM platform on which to run the simulation''')
+    device_index = CInt(1, config=True, help='''OpenMM device index for CUDA or
+        OpenCL platforms. This is used to select which GPU will be used on a
+        multi-gpu system. This option is ignored on reference platform''')
+
+
     # expose these as command line flags on --help
     # other settings can still be specified on the command line, its just
     # less convenient
@@ -56,7 +63,9 @@ class Simulator(Device):
                   number_of_steps='Simulator.number_of_steps',
                   report_interval='Simulator.report_interval',
                   zmq_port='Device.zmq_port',
-                  zml_url='Device.zmq_url')
+                  zml_url='Device.zmq_url',
+                  platform='Simulator.platform',
+                  device_index='Simulator.device_index')
 
 
     def start(self):
@@ -85,7 +94,22 @@ class Simulator(Device):
         self.log.info('Setting up simulation')
         state, topology = self.deserialize_input(content)
 
-        simulation = Simulation(topology, self.system, self.integrator)
+        # set the GPU platform
+        platform = Platform.getPlatformByName(self.platform)
+        if self.platform == 'CUDA':
+            properties = {'CudaPrecision': 'mixed',
+                          'CudaDeviceIndex': str(self.device_index)
+                         }
+        elif self.platform == 'OpenCL':
+            properties = {'OpenCLPrecision': 'mixed',
+                          'OpenCLDeviceIndex': str(self.device_index)
+                         }
+        else:
+            properties = None
+
+
+        simulation = Simulation(topology, self.system, self.integrator,
+                                platform, properties)
         # do the setup
         self.set_state(state, simulation)
         if self.minimize:
