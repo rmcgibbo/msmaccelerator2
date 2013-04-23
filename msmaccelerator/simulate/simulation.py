@@ -63,7 +63,7 @@ class Simulator(Device):
                   number_of_steps='Simulator.number_of_steps',
                   report_interval='Simulator.report_interval',
                   zmq_port='Device.zmq_port',
-                  zml_url='Device.zmq_url',
+                  zmq_url='Device.zmq_url',
                   platform='Simulator.platform',
                   device_index='Simulator.device_index')
 

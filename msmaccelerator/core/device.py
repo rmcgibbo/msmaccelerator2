@@ -8,9 +8,9 @@ to get registered with the server and start their work.
 # Imports
 ##############################################################################
 
+import zmq
 import uuid
 import yaml
-import zmq
 
 from IPython.utils.traitlets import Int, Unicode, Bytes
 
