@@ -36,6 +36,7 @@ class BaseSampler(Configurable):
     also as a base class for the other samplers
     """
     log = Instance('logging.Logger')
+    db = Instance('pymongo.database.Database')
     statebuilder = Instance('msmaccelerator.server.openmm.OpenMMStateBuilder')
     seed_structures = Unicode('ala5.pdb', config=True, help='''Trajectory file giving the
         initial structures that you want to sample from. This should be a
@@ -192,11 +193,13 @@ class CountsSampler(CentroidSampler):
         is changed, this callback will be triggered. We use this hook to set
         the weights, which will be used by the superclass to randomly sample
         the generators with."""
+        self.reset_weights()
 
-        # TODO: If in the future we start changing beta asynchronously, then
-        # we should also make sure that this code gets called on _beta_changed
-        # as well
+    def _beta_changed(self, old, new):
+        print 'beta changed'
+        self.reset_weights()
 
+    def reset_weights(self):
         counts_per_state = np.array(self.model.counts.sum(axis=1)).flatten() + 10.**-8
         w = np.power(counts_per_state, self.beta - 1.0)
 

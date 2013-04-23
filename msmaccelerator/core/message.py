@@ -103,6 +103,14 @@ class Message(object):
     def __getitem__(self, k):
         return self.__dict__[k]
 
+    def to_dict(self):
+        dct = {}
+
+        for k, v in self.__dict__.iteritems():
+            if isinstance(v, Message):
+                v = v.to_dict()
+            dct[k] = v
+        return dct
 
 def squash_unicode(obj):
     """coerce unicode back to bytestrings."""

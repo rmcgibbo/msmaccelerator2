@@ -5,7 +5,6 @@
 ##############################################################################
 import os
 import datetime
-import glob
 from zmq.eventloop import ioloop
 ioloop.install()  # this needs to come at the beginning
 
@@ -85,22 +84,30 @@ class AdaptiveServer(BaseServer):
 
         """
         self.sampler = CountsSampler(config=self.config)
+        self.sampler.db = self.db
         self.sampler.log = self.log
         self.sampler.statebuilder = OpenMMStateBuilder(self.system_xml)
         self.log.info('Sampler loaded')
 
-        model_fns = sorted(glob.glob(os.path.join(self.models_outdir, '*.h5')),
-                key = lambda fn: os.stat(fn).st_mtime)
+        try:
+            # this looks for the most recent modeler in the database
+            # sorting by the time it was created, in descending order
+            # so that the latest one is first
+            last_model = self.db.models.find().sort('header.time', -1).next()
 
-        if len(model_fns) > 0:
-            last_model = model_fns[-1]
-            self.sampler.model_fn = last_model
+            # and we get the filename
+            self.sampler.model_fn = last_model['content']['output']['path']
+
             self.log.info(('Loading most recent model on disk, "%s". According '
-                'to the filesystem, it was last modified at %s'), last_model,
-                datetime.datetime.fromtimestamp(os.stat(last_model).st_mtime))
+                'to the database'), last_model)
             self.log.info('Ignoring seed structures, since we found a model.')
-        else:
+
+        except StopIteration:
+            # next() throws a stopiteration if there was no model in the
+            # database, so under this circumstance we fall back to using
+            # the initial structures
             self.log.info('Using seed structures. No existing model found on disk.')
+
 
 
     ########################################################################
@@ -136,8 +143,14 @@ class AdaptiveServer(BaseServer):
     def register_Modeler(self, header, content):
         """Called when a Modeler device boots up, asking for a path to data.
         """
+
+        # get the filename of all of the trajectories from the database
+        traj_fns = []
+        for d in self.db.simulations.find():
+            traj_fns.append(d['content']['output']['path'])
+
         self.send_message(header.sender_id, 'construct_model', content={
-            'traj_fns': glob.glob(os.path.join(self.traj_outdir, '*.lh5')),
+            'traj_fns': traj_fns,
             'output': {
                 'protocol': 'localfs',
                 'path': os.path.join(os.path.abspath(self.models_outdir), header.sender_id + '.h5'),
@@ -153,6 +166,13 @@ class AdaptiveServer(BaseServer):
         self.sampler.model_fn = content.output.path
         self.send_message(header.sender_id, 'acknowledge_receipt')
 
+        # save every model in the database
+        self.db.models.save({
+            'header': header.to_dict(),
+            'content': content.to_dict(),
+        })
+
+
     def simulation_status(self, header, content):
         """Called when the simulation reports its status.
         """
@@ -161,6 +181,56 @@ class AdaptiveServer(BaseServer):
     def simulation_done(self, header, content):
         """Called when a simulation finishes"""
         self.send_message(header.sender_id, 'acknowledge_receipt')
+
+        # save every simulation in the database
+        self.db.simulations.save({
+            'header': header.to_dict(),
+            'content': content.to_dict(),
+        })
+
+
+    # permit external interaction with the sampler, to change its
+    # beta
+    def register_Interactor(self, header, content):
+        """When a new interactor device is created, we send it the
+        mongo db connection string, so that it can connect to and
+        query the database"""
+        self.send_message(header.sender_id, 'acknowledge_receipt', content={
+            'mongo_url': self.mongo_url,
+            'db_name': self.db_name
+        })
+
+    def set_beta(self, header, content):
+        """The interactor can tell us to change our sampler's beta
+        parameteter"""
+
+        try:
+            new_beta = content.value
+            self.sampler.beta = new_beta
+            self.send_message(header.sender_id, 'set_beta', content={
+                'status': 'success'
+            })
+        except Exception as e:
+            self.send_message(header.sender_id, 'set_beta', content={
+                'status': 'failure',
+                'msg': str(e)
+            })
+
+    def get_beta(self, header, content):
+        """Query the beta parameter in the sampler
+        """
+
+        try:
+            self.send_message(header.sender_id, 'response', content={
+                'beta': self.sampler.beta,
+                'status': 'sucess'
+            })
+        except AttributeError as e:
+            self.send_message(header.sender_id, 'response', content={
+                'status': 'failure',
+                'msg': str(e)
+            })
+
 
 
     ########################################################################

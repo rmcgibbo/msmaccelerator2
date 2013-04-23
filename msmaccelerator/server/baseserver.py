@@ -13,6 +13,20 @@ ioloop.install()  # this needs to come at the beginning
 from zmq.eventloop.zmqstream import ZMQStream
 from IPython.utils.traitlets import Unicode, Int, Bool
 
+try:
+    from pymongo import Connection
+except ImportError:
+    print '#'*80
+    print 'You need to install PyMongo, the MongoDB client.'
+    print 'You can get it from here: https://pypi.python.org/pypi/pymongo/'
+    print 'Or install it directly with your python package manager using'
+    print '$ easy_install pymongo'
+    print 'or '
+    print '$ pip install pymongo'
+    print '#'*80
+    raise
+
+
 # local
 from ..core.app import App
 from ..core.message import Message, pack_message
@@ -42,18 +56,11 @@ class BaseServer(App):
         MONGO_URL. It should be a string like:
             mongodb://<user>:<pass>@hatch.mongohq.com:10034/msmaccelerator
         ''')
-    use_db = Bool(True, config=True, help='''
-        Do you want to connect to a database to log the messages?''')
     db_name = Unicode('', config=True, help='''
         The name of the database to log to. If not supplied, its infered
         by chopping off the last bit of the mongo_url string, after the
         last "/". In the example above, that would be 'msmaccelerator''')
-    collection_suffix = Unicode('', config=True, help='''
-        We're going to log messages into the database under the 'messages'
-        collection, but if you want not to get messages from one run
-        of msmaccelerator confused with another run, supply this
-        'message_suffix' string, and then we'll use a collection
-        like "messages-{}".format(messasges_suffix)''')
+
 
     def start(self):
         url = 'tcp://*:%s' % int(self.zmq_port)
@@ -66,26 +73,11 @@ class BaseServer(App):
         self._stream.on_recv(self._dispatch)
 
         self.db = None
-        if self.use_db:
-            self._start_database()
+        self._start_database()
 
     def _start_database(self):
-        """Sets the attribute self.db, self.messages_collection
+        """Sets the attribute self.db
         """
-
-        try:
-            from pymongo import Connection
-        except ImportError:
-            print '#'*80
-            print 'You need to install PyMongo, the MongoDB client.'
-            print 'You can get it from here: https://pypi.python.org/pypi/pymongo/'
-            print 'Or install it directly with your python package manager using'
-            print '$ easy_install pymongo'
-            print 'or '
-            print '$ pip install pymongo'
-            print '#'*80
-            raise
-
         if self.mongo_url == '':
             self.mongo_url = os.environ.get('MONGO_URL', '')
 
@@ -109,7 +101,6 @@ class BaseServer(App):
             self.log.info('Parsed mongodb DB name: %s', self.db_name)
 
         self.db = getattr(c, self.db_name)  # database name
-        self.messages_collection = getattr(self.db, 'messages' + self.collection_suffix)
 
 
     def send_message(self, client_id, msg_type, content=None):
@@ -139,10 +130,6 @@ class BaseServer(App):
 
         msg = pack_message(msg_type, self.uuid, content)
         self.log.info('SENDING MESSAGE: %s', msg)
-        if self.db is not None:
-            db_entry = msg.copy()
-            db_entry['client_id'] = client_id
-            self.messages_collection.save(db_entry)
 
         self._stream.send(client_id, zmq.SNDMORE)
         self._stream.send('', zmq.SNDMORE)
@@ -193,14 +180,12 @@ class BaseServer(App):
         msg = Message(msg_dict)
         self.log.info('RECEIVING MESSAGE: %s', msg)
 
-        if self.db is not None:
-            self.messages_collection.save(msg_dict)
-
         try:
             responder = getattr(self, msg.header.msg_type)
         except AttributeError:
             self.log.critical('RESPONDER NOT FOUND FOR MESSAGE: %s',
                               msg.header.msg_type)
+            return
 
         responder(msg.header, msg.content)
 

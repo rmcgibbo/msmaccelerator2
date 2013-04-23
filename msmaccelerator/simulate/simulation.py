@@ -117,6 +117,10 @@ class Simulator(Device):
         # tell the master that I'm done
         self.send_recv(msg_type='simulation_done', content={
             'status': 'success',
+            'output': {
+                'protocol': 'localfs',
+                'path': content.output.path
+            }
         })
 
     ##########################################################################
