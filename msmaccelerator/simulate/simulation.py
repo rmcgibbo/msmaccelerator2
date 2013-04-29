@@ -111,9 +111,9 @@ class Simulator(Device):
 
         simulation = Simulation(topology, self.system, self.integrator,
                                 platform, properties)
-        self.sanity_check(simulation)
         # do the setup
         self.set_state(state, simulation)
+        self.sanity_check(simulation)
         if self.minimize:
             self.log.info('minimizing...')
             simulation.minimizeEnergy()
@@ -159,7 +159,11 @@ class Simulator(Device):
         positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
         for atom1, atom2 in simulation.topology.bonds():
             d = np.linalg.norm(positions[atom1.index, :] - positions[atom2.index, :])
-            assert d < 0.3, 'atoms are bonded according to topology but not close by in space'
+            if not d < 0.3:
+                self.log.error(positions[atom1.index, :])
+                self.log.error(positions[atom2.index, :])
+                raise ValueError('atoms are bonded according to topology but not close by '
+                                 'in space: %s. %s' % (d, positions))
 
 
     def deserialize_input(self, content):
