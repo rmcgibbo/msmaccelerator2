@@ -196,12 +196,12 @@ class CountsSampler(CentroidSampler):
         self.reset_weights()
 
     def _beta_changed(self, old, new):
-        self.log.info('beta changed')
+        print 'beta changed'
         self.reset_weights()
 
     def reset_weights(self):
         if self.model is None:
-            self.log.info('no model yet')
+            print 'no model yet'
             return
 
         counts_per_state = np.array(self.model.counts.sum(axis=1)).flatten() + 10.**-8
