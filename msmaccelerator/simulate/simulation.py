@@ -5,6 +5,7 @@ structure, and then propagate.
 # Imports
 ##############################################################################
 
+import numpy as np
 from IPython.utils.traitlets import Unicode, CInt, Instance, Bool, Enum
 from mdtraj.reporters import HDF5Reporter
 from simtk.openmm import XmlSerializer, Platform
@@ -95,7 +96,7 @@ class Simulator(Device):
         state, topology = self.deserialize_input(content)
 
         # set the GPU platform
-        platform = Platform.getPlatformByName(self.platform)
+        platform = Platform.getPlatformByName(str(self.platform))
         if self.platform == 'CUDA':
             properties = {'CudaPrecision': 'mixed',
                           'CudaDeviceIndex': str(self.device_index)
@@ -110,6 +111,7 @@ class Simulator(Device):
 
         simulation = Simulation(topology, self.system, self.integrator,
                                 platform, properties)
+        self.sanity_check(simulation)
         # do the setup
         self.set_state(state, simulation)
         if self.minimize:
@@ -153,6 +155,13 @@ class Simulator(Device):
     # Begin helpers for setting up the simulation
     ##########################################################################
 
+    def sanity_check(self, simulation):
+        positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
+        for atom1, atom2 in simulation.topology.bonds():
+            d = np.linalg.norm(positions[atom1.index, :] - positions[atom2.index, :])
+            assert d < 0.3, 'atoms are bonded according to topology but not close by in space'
+
+
     def deserialize_input(self, content):
         """Retreive the state and topology from the message content
 
@@ -168,6 +177,7 @@ class Simulator(Device):
 
         if content.starting_state.protocol == 'localfs':
             with open(content.starting_state.path) as f:
+                self.log.info('Opening state file: %s', content.starting_state.path)
                 state = XmlSerializer.deserialize(f.read())
         else:
             raise ValueError('Unknown protocol')
