@@ -91,7 +91,7 @@ class Simulator(Device):
 
         We run some OpenMM dynamics, and then send back the results.
         """
-        self.log.info('Setting up simulation')
+        self.log.info('Setting up simulation...')
         state, topology = self.deserialize_input(content)
 
         # set the GPU platform
@@ -113,6 +113,7 @@ class Simulator(Device):
         # do the setup
         self.set_state(state, simulation)
         if self.minimize:
+            self.log.info('minimizing...')
             simulation.minimizeEnergy()
 
         if self.random_initial_velocities:
@@ -127,6 +128,7 @@ class Simulator(Device):
             pass
 
         assert content.output.protocol == 'localfs', "I'm currently only equiped for localfs output"
+        self.log.info('adding reporters...')
         self.add_reporters(simulation, content.output.path)
 
         # run dynamics!
