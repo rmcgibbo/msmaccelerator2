@@ -111,7 +111,7 @@ class Device(App):
         return Message(msg)
 
 
-    def send_recv(self, msg_type, content=None, timeout=3, retries=3):
+    def send_recv(self, msg_type, content=None, timeout=10, retries=3):
         """Send a message to the server and receive a response
 
         This method inplementes the "Lazy-Pirate pattern" for
