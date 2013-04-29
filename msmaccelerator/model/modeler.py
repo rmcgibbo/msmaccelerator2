@@ -128,6 +128,7 @@ class Modeler(Device):
 
         self.log.info('loaded %s trajectories', len(trajs))
         self.log.info('loaded %s total frames...', sum(len(t) for t in trajs))
+        self.log.info('loaded %s atoms', t2['XYZList'].shape[1])
 
         if len(trajs) == 0:
             raise ValueError('No trajectories found!')
