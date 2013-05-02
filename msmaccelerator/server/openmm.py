@@ -43,7 +43,7 @@ class OpenMMStateBuilder(object):
             positions and the box vectors (if you're using periodic boundary
             conditions)
         """
-        if trajectory.box is not None:
+        if trajectory.unitcell_vectors is not None:
             self.context.setPeriodicBoxVectors(*trajectory.openmm_boxes(0))
 
         self.context.setPositions(trajectory.openmm_positions(0))

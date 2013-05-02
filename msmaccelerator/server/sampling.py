@@ -36,7 +36,6 @@ class BaseSampler(Configurable):
     also as a base class for the other samplers
     """
     log = Instance('logging.Logger')
-    db = Instance('pymongo.database.Database')
     statebuilder = Instance('msmaccelerator.server.openmm.OpenMMStateBuilder')
     seed_structures = Unicode('ala5.pdb', config=True, help='''Trajectory file giving the
         initial structures that you want to sample from. This should be a

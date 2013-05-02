@@ -30,5 +30,18 @@ with open('integrator.xml', 'w') as f:
 
 print system
 
+#print 'Context...'
+#context = Context(system, integrator, Platform.getPlatformByName("Reference"))
+#context.setPositions(pdb.positions)
+
+#box = [Vec3(1,0,0), Vec3(0,2,0), Vec3(0,0,3)] * angstroms
+#context.setPeriodicBoxVectors(*box)
+#state = context.getState(getPositions=True, getVelocities=True,
+#                         getForces=True, getEnergy=True,
+#                         getParameters=True, enforcePeriodicBox=True)
+
+#with open('native2.xml', 'w') as f:
+#    f.write(XmlSerializer.serialize(state))
+
 #import IPython as ip
 #ip.embed()

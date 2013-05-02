@@ -13,21 +13,8 @@ ioloop.install()  # this needs to come at the beginning
 from zmq.eventloop.zmqstream import ZMQStream
 from IPython.utils.traitlets import Unicode, Int, Bool
 
-try:
-    from pymongo import Connection
-except ImportError:
-    print '#'*80
-    print 'You need to install PyMongo, the MongoDB client.'
-    print 'You can get it from here: https://pypi.python.org/pypi/pymongo/'
-    print 'Or install it directly with your python package manager using'
-    print '$ easy_install pymongo'
-    print 'or '
-    print '$ pip install pymongo'
-    print '#'*80
-    raise
-
-
 # local
+from ..core.database import connect_to_sqlite_db
 from ..core.app import App
 from ..core.message import Message, pack_message
 
@@ -50,16 +37,8 @@ class BaseServer(App):
     """
 
     zmq_port = Int(12345, config=True, help='ZeroMQ port to serve on')
-    mongo_url = Unicode('', config=True, help='''
-        The url for mongodb. This can be either passed in or, if not
-        supplied, it will be read from the environment variable
-        MONGO_URL. It should be a string like:
-            mongodb://<user>:<pass>@hatch.mongohq.com:10034/msmaccelerator
-        ''')
-    db_name = Unicode('', config=True, help='''
-        The name of the database to log to. If not supplied, its infered
-        by chopping off the last bit of the mongo_url string, after the
-        last "/". In the example above, that would be 'msmaccelerator''')
+    db_path = Unicode('db.sqlite', config=True, help='''
+        Path to the database (sqlite3 file)''')
 
 
     def start(self):
@@ -71,37 +50,7 @@ class BaseServer(App):
         s.bind(url)
         self._stream = ZMQStream(s)
         self._stream.on_recv(self._dispatch)
-
-        self.db = None
-        self._start_database()
-
-    def _start_database(self):
-        """Sets the attribute self.db
-        """
-        if self.mongo_url == '':
-            self.mongo_url = os.environ.get('MONGO_URL', '')
-
-        if self.mongo_url == '':
-            self.log.error('Could not connect to database. You need to '
-                'add an env variable MONGO_URL with the url for the mongo '
-                'instance. If you\'re running you own mongo server, then '
-                'this will be some kind of localhost url. It\'s recommended '
-                'instead that you use a cloud Database-as-a-service like '
-                'MongoHQ or MongoLab. They will give you a url to connect to'
-                'your db. See http://blog.mongohq.com/blog/2012/02/20/connecting-to-mongohq/ '
-                'for some details')
-            self.db = None
-            return
-
-        c = Connection(self.mongo_url)
-        if self.db_name == '':
-            # this gets the name of the db from the mongo url
-            # we should do more validation here
-            self.db_name = self.mongo_url.split('/')[-1]
-            self.log.info('Parsed mongodb DB name: %s', self.db_name)
-
-        self.db = getattr(c, self.db_name)  # database name
-
+        connect_to_sqlite_db(self.db_path)
 
     def send_message(self, client_id, msg_type, content=None):
         """Send a message out to a client

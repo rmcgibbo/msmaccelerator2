@@ -4,7 +4,7 @@
 # Imports
 ##############################################################################
 import os
-import datetime
+from datetime import datetime
 from zmq.eventloop import ioloop
 ioloop.install()  # this needs to come at the beginning
 
@@ -12,6 +12,7 @@ ioloop.install()  # this needs to come at the beginning
 from .sampling import CountsSampler
 from .openmm import OpenMMStateBuilder
 from .baseserver import BaseServer
+from ..core.database import session, Model, Trajectory
 
 # ipython
 from IPython.utils.traitlets import Unicode, Instance
@@ -54,7 +55,6 @@ class AdaptiveServer(BaseServer):
     aliases = dict(use_db='AdaptiveServer.use_db',
                    zmq_port='BaseServer.zmq_port',
                    collection_suffix='BaseServer.collection_suffix',
-                   mongo_url='BaseServer.mongo_url',
                    system_xml='AdaptiveServer.system_xml',
                    seed_structures='BaseSampler.seed_structures',
                    beta='CountsSampler.beta')
@@ -84,28 +84,18 @@ class AdaptiveServer(BaseServer):
 
         """
         self.sampler = CountsSampler(config=self.config)
-        self.sampler.db = self.db
         self.sampler.log = self.log
         self.sampler.statebuilder = OpenMMStateBuilder(self.system_xml)
         self.log.info('Sampler loaded')
 
-        try:
-            # this looks for the most recent modeler in the database
-            # sorting by the time it was created, in descending order
-            # so that the latest one is first
-            last_model = self.db.models.find().sort('header.time', -1).next()
-
-            # and we get the filename
-            self.sampler.model_fn = last_model['content']['output']['path']
-
+        last_model = session.query(Model).order_by(Model.time.desc()).get(1)
+        if last_model is not None:
+            self.sampler.model_fn = last_model.path
             self.log.info(('Loading most recent model on disk, "%s". According '
                 'to the database'), last_model)
             self.log.info('Ignoring seed structures, since we found a model.')
 
-        except StopIteration:
-            # next() throws a stopiteration if there was no model in the
-            # database, so under this circumstance we fall back to using
-            # the initial structures
+        else:
             self.log.info('Using seed structures. No existing model found on disk.')
 
 
@@ -136,7 +126,7 @@ class AdaptiveServer(BaseServer):
             },
             'output': {
                 'protocol': 'localfs',
-                'path': os.path.join(os.path.abspath(self.traj_outdir), header.sender_id + '.lh5'),
+                'path': os.path.join(os.path.abspath(self.traj_outdir), header.sender_id + '.h5'),
             },
         })
 
@@ -145,9 +135,7 @@ class AdaptiveServer(BaseServer):
         """
 
         # get the filename of all of the trajectories from the database
-        traj_fns = []
-        for d in self.db.simulations.find():
-            traj_fns.append(d['content']['output']['path'])
+        traj_fns = session.query(Trajectory.path).all()
 
         self.send_message(header.sender_id, 'construct_model', content={
             'traj_fns': traj_fns,
@@ -167,11 +155,12 @@ class AdaptiveServer(BaseServer):
         self.send_message(header.sender_id, 'acknowledge_receipt')
 
         # save every model in the database
-        self.db.models.save({
-            'header': header.to_dict(),
-            'content': content.to_dict(),
-        })
-
+        session.add(Model(
+            time = datetime.fromtimestamp(header.time),
+            protocol = content['output']['protocol'],
+            path = content['output']['path']
+        ))
+        session.commit()
 
     def simulation_status(self, header, content):
         """Called when the simulation reports its status.
@@ -182,23 +171,18 @@ class AdaptiveServer(BaseServer):
         """Called when a simulation finishes"""
         self.send_message(header.sender_id, 'acknowledge_receipt')
 
-        # save every simulation in the database
-        self.db.simulations.save({
-            'header': header.to_dict(),
-            'content': content.to_dict(),
-        })
+        session.add(Trajectory(
+            time = datetime.fromtimestamp(header.time),
+            protocol = content['output']['protocol'],
+            path = content['output']['path']
+        ))
+        session.commit()
 
 
     # permit external interaction with the sampler, to change its
     # beta
     def register_Interactor(self, header, content):
-        """When a new interactor device is created, we send it the
-        mongo db connection string, so that it can connect to and
-        query the database"""
-        self.send_message(header.sender_id, 'acknowledge_receipt', content={
-            'mongo_url': self.mongo_url,
-            'db_name': self.db_name
-        })
+        self.send_message(header.sender_id, 'acknowledge_receipt')
 
     def set_beta(self, header, content):
         """The interactor can tell us to change our sampler's beta

@@ -4,10 +4,10 @@
 
 import IPython
 import numpy as np
-from pymongo import Connection
 from IPython.utils.traitlets import Unicode, Instance, Bool
 
 # local
+from ..core.database import session, connect_to_sqlite_db, Trajectory, Model
 from ..core.device import Device
 
 ##############################################################################
@@ -19,11 +19,12 @@ class Interactor(Device):
     path = 'msmaccelerator.interact.interactor.Interactor'
     short_description = 'Modify the parameters inside of a live server'
     long_description = ''
-    db = Instance('pymongo.database.Database')
     
     set_beta = Instance(int, config=True, help='''Set the server's beta
         parameter''')
     shell = Bool(False, config=True, help='''Go into interactive shell mode''')
+    db_path = Unicode('db.sqlite', config=True, help='''
+        Path to the database (sqlite3 file)''')
 
     aliases = dict(set_beta = 'Interactor.set_beta',
                    shell = 'Interactor.shell',
@@ -31,11 +32,7 @@ class Interactor(Device):
                    zmq_url = 'Device.zmq_url')
     
     def on_startup_message(self, msg):
-        mongo_url = msg.content.mongo_url
-        db_name = msg.content.db_name
-        
-        c = Connection(mongo_url)
-        self.db = getattr(c, db_name)
+        connect_to_sqlite_db(self.db_path)
 
         if self.shell:
             IPython.embed()
