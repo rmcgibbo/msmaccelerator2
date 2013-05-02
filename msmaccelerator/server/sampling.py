@@ -207,5 +207,6 @@ class CountsSampler(CentroidSampler):
         w = np.power(counts_per_state, self.beta - 1.0)
 
         self.weights = w / np.sum(w)
+        self.cumulative_weights = np.cumsum(self.weights)
         self.log.info('[CountsSampler] Beta=%s. Setting multinomial weights, %s',
                       self.beta, self.weights)

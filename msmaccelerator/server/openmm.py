@@ -5,7 +5,8 @@ Code for the server's interaction with OpenMM
 # Imports
 ##############################################################################
 
-from simtk.unit import femtoseconds
+import numpy as np
+from simtk.unit import femtoseconds, nanometers
 from simtk.openmm import Context, Platform, XmlSerializer, VerletIntegrator
 
 ##############################################################################
@@ -44,7 +45,9 @@ class OpenMMStateBuilder(object):
             conditions)
         """
         if trajectory.unitcell_vectors is not None:
-            self.context.setPeriodicBoxVectors(*trajectory.openmm_boxes(0))
+            a, b, c = trajectory.unitcell_lengths[0]
+            np.testing.assert_array_almost_equal(trajectory.unitcell_angles[0], np.ones(3)*90)
+            self.context.setPeriodicBoxVectors([a, 0, 0] * nanometers, [0, b, 0] * nanometers, [0, 0, c] * nanometers)
 
         self.context.setPositions(trajectory.openmm_positions(0))
         state = self.context.getState(getPositions=True, getVelocities=True,
