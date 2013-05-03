@@ -137,7 +137,7 @@ class AdaptiveServer(BaseServer):
         # get the filename of all of the trajectories from the database
         traj_fns = [str(e[0]) for e in session.query(Trajectory.path).all()]
         assert isinstance(traj_fns, list)
-        assert isinstance(traj_fns[0], str)
+        assert len(traj_fns) == 0 or isinstance(traj_fns[0], str)
 
         self.send_message(header.sender_id, 'construct_model', content={
             'traj_fns': traj_fns,

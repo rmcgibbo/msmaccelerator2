@@ -216,7 +216,9 @@ class Simulator(Device):
         callback_reporter = CallbackReporter(reporter_callback,
             self.report_interval, step=True, potentialEnergy=True,
             temperature=True, time=True, total_steps=self.number_of_steps)
-        h5_reporter = HDF5Reporter(outfn, self.report_interval)
+        h5_reporter = HDF5Reporter(outfn, self.report_interval, coordinates=True,
+                                   time=True, cell=True, potentialEnergy=True,
+                                   kineticEnergy=True, temperature=True)
 
         simulation.reporters.append(callback_reporter)
         simulation.reporters.append(h5_reporter)

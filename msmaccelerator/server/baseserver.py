@@ -1,3 +1,4 @@
+
 """Base class for ZMQ server app.
 """
 ##############################################################################
@@ -108,6 +109,12 @@ class BaseServer(App):
         messages : list
             A list of messages that have arrived
         """
+        # for some reason we seem to be getting double logging
+        # inside the event loop, but not outside it. i'm not sure
+        # if this is a tornado thing or what, but disabling
+        # the parent log handler seems to fix it.
+        self.log.parent.handlers = []
+
         if not len(frames) == 3:
             self.log.error('invalid message received. messages are expected to contain only three frames: %s', str(frames))
 
