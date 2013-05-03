@@ -52,9 +52,7 @@ class AdaptiveServer(BaseServer):
     # line from this app. very convenient.
     classes = [CountsSampler]
 
-    aliases = dict(use_db='AdaptiveServer.use_db',
-                   zmq_port='BaseServer.zmq_port',
-                   collection_suffix='BaseServer.collection_suffix',
+    aliases = dict(zmq_port='BaseServer.zmq_port',
                    system_xml='AdaptiveServer.system_xml',
                    seed_structures='BaseSampler.seed_structures',
                    beta='CountsSampler.beta')
