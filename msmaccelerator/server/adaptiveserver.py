@@ -10,12 +10,12 @@ ioloop.install()  # this needs to come at the beginning
 
 # local
 from .sampling import CountsSampler
-from .openmm import OpenMMStateBuilder
+from .statebuilder import OpenMMStateBuilder, AmberStateBuilder
 from .baseserver import BaseServer
 from ..core.database import session, Model, Trajectory
 
 # ipython
-from IPython.utils.traitlets import Unicode, Instance
+from IPython.utils.traitlets import Unicode, Instance, Enum
 ##############################################################################
 # Classes
 ##############################################################################
@@ -32,9 +32,15 @@ class AdaptiveServer(BaseServer):
     """
 
     # configurables
+    md_engine = Enum(['OpenMM', 'AMBER'], config=True, default_value='OpenMM',
+        help='''Which MD engine do you want to configure the server to
+        iterface with? If 'OpenMM', the server will emit xml-serialized
+        states to simulators that connect. If 'AMBER', the server will
+        instead emit inpcrd files to the simulators.''')
     system_xml = Unicode('system.xml', config=True, help='''Path to the
         XML file containing the OpenMM system to propagate. This is required
-        by the server to properly serialize the starting conformations.''')
+        by the server, iff md_engine=='OpenMM', to properly serialize the
+        starting conformations.''')
     traj_outdir = Unicode('trajs/', config=True, help='''Directory on the local
         filesystem where output trajectories will be saved''')
     models_outdir = Unicode('models/', config=True, help='''Directory on
@@ -47,6 +53,12 @@ class AdaptiveServer(BaseServer):
         Simulator. Honestly, I'm not sure exactly why we need it. TODO:
         ask Peter about this.''')
 
+    # traits that are not configurable
+    state_extension = Enum(['xml', 'inpcrd'], help='''The type of states
+        to emit to connecting simulators. "xml" is set if md_engine=="OpenMM",
+        and "inpcrd" is set of md_engine=="AMBER". This option is not
+        configurable.''')
+
     sampler = Instance('msmaccelerator.server.sampling.CentroidSampler')
     # this class attributes lets us configure the sampler on the command
     # line from this app. very convenient.
@@ -55,7 +67,20 @@ class AdaptiveServer(BaseServer):
     aliases = dict(zmq_port='BaseServer.zmq_port',
                    system_xml='AdaptiveServer.system_xml',
                    seed_structures='BaseSampler.seed_structures',
-                   beta='CountsSampler.beta')
+                   beta='CountsSampler.beta',
+                   md_engine='AdaptiveServer.md_engine')
+
+    def _md_engine_changed(self, old, new):
+        """Keep state extension in sync with md_engine.
+
+        Whenever md_engine is changed, this callback executes and changes
+        state_extension"""
+        if new == 'OpenMM':
+            self.state_extension = 'xml'
+        elif new == 'AMBER':
+            self.state_extension = 'inpcrd'
+
+
 
     def start(self):
         # run the startup in the base class
@@ -83,7 +108,13 @@ class AdaptiveServer(BaseServer):
         """
         self.sampler = CountsSampler(config=self.config)
         self.sampler.log = self.log
-        self.sampler.statebuilder = OpenMMStateBuilder(self.system_xml)
+        if self.md_engine == 'OpenMM':
+            self.sampler.statebuilder = OpenMMStateBuilder(self.system_xml)
+        elif self.md_engine == 'AMBER':
+            self.sampler.statebuilder = AmberStateBuilder()
+        else:
+            raise ValueError('md_engine must be one of "OpenMM" or "AMBER": %s' % self.md_engine)
+
         self.log.info('Sampler loaded')
 
         last_model = session.query(Model).order_by(Model.time.desc()).get(1)
@@ -106,11 +137,10 @@ class AdaptiveServer(BaseServer):
         """Called at the when a Simulator device boots up. We give it
         starting conditions
         """
-
         starting_state_fn = os.path.join(self.starting_states_outdir,
-                                         '%s.xml' % header.sender_id)
+                                '%s.%s' % (header.sender_id, self.state_extension))
         with open(starting_state_fn, 'w') as f:
-            state = self.sampler.sample_xml_state()
+            state = self.sampler.get_state()
             f.write(state)
 
         self.send_message(header.sender_id, 'simulate', content={

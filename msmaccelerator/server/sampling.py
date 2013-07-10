@@ -43,9 +43,9 @@ class BaseSampler(Configurable):
         will only be used in the beginning, before we have an actual MSM
         to use.''')
 
-    def sample_xml_state(self):
+    def get_state(self):
         self.log.error(self.seed_structures)
-        """Get a XML serialized state to send to the client to propage
+        """Get a serialized state to send to the client to propage
 
         This is the main external interface by which the server interacts
         with the adaptive sampler.
@@ -53,7 +53,7 @@ class BaseSampler(Configurable):
         Returns
         -------
         serialized_state : string
-            A string of XML containing a serialized reprenation of the state
+            A string containing a serialized reprenation of the state
             to send to a client to simulate.
         """
         return self.statebuilder.build(self.select())
