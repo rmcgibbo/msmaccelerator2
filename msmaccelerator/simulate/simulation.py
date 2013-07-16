@@ -20,8 +20,8 @@ from ..core.device import Device
 ##############################################################################
 
 
-class Simulator(Device):
-    name = 'simulate'
+class OpenMMSimulator(Device):
+    name = 'OpenMM'
     path = 'msmaccelerator.simulate.simulation.Simulator'
     short_description = 'Run a single round of dynamics with OpenMM'
     long_description = '''This device will connect to the msmaccelerator server,

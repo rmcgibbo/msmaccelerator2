@@ -105,7 +105,7 @@ class AmberStateBuilder(StateBuilder):
 
         if trajectory.unitcell_lengths != None:
             if linecount != 0:
-                buf.write(os.linsep)
+                buf.write(os.linesep)
             box = (trajectory.unitcell_lengths[0]*10).tolist()
             box.extend(trajectory.unitcell_angles[0].tolist())
             buf.write(('%12.7f' * 6) % tuple(box))

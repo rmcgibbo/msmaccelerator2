@@ -16,7 +16,7 @@ import os
 
 # 3rd party
 import numpy as np
-import mdtraj.trajectory
+import mdtraj as md
 from IPython.config import Configurable
 from IPython.utils.traitlets import Instance, Float, Unicode
 
@@ -36,7 +36,7 @@ class BaseSampler(Configurable):
     also as a base class for the other samplers
     """
     log = Instance('logging.Logger')
-    statebuilder = Instance('msmaccelerator.server.openmm.OpenMMStateBuilder')
+    statebuilder = Instance('msmaccelerator.server.statebuilder.StateBuilder')
     seed_structures = Unicode('ala5.pdb', config=True, help='''Trajectory file giving the
         initial structures that you want to sample from. This should be a
         single PDB or other type of loadable trajectory file. These structures
@@ -68,7 +68,7 @@ class BaseSampler(Configurable):
 
         Returns
         -------
-        frame : mdtraj.Trajectory
+        frame : md.Trajectory
             This method should return a Trajectory object, whose first
             frame contains the positions (and box vectors) that you want
             to send to the client to simulate.
@@ -82,7 +82,7 @@ class BaseSampler(Configurable):
         # if the seed structures trajectory is big and supports random
         # access, this might not be the most efficient, since we're loading
         # the whole trajectory just to get a single frame.
-        traj = mdtraj.trajectory.load(self.seed_structures)
+        traj = md.load(self.seed_structures)
         frame = np.random.randint(len(traj))
 
         self.log.info('Sampling from the seed structures, frame %d' % frame)
@@ -142,7 +142,7 @@ class CentroidSampler(BaseSampler):
 
         Returns
         -------
-        frame : mdtraj.Trajectory
+        frame : md.Trajectory
             This method retursn a Trajectory object, whose first frame
             contains the positions (and box vectors) that you want to send to
             the client to simulate.
@@ -161,7 +161,7 @@ class CentroidSampler(BaseSampler):
         filename = self.model.traj_filenames[traj]
 
         # load up the generator from disk
-        traj = mdtraj.trajectory.load_hdf(filename, frame=frame)
+        traj = md.trajectory.load(filename)[frame]
 
         self.log.info('Sampling from a multinimial. I choose '
                       'traj="%s", frame=%s', filename, frame)

@@ -53,12 +53,6 @@ class AdaptiveServer(BaseServer):
         Simulator. Honestly, I'm not sure exactly why we need it. TODO:
         ask Peter about this.''')
 
-    # traits that are not configurable
-    state_extension = Enum(['xml', 'inpcrd'], help='''The type of states
-        to emit to connecting simulators. "xml" is set if md_engine=="OpenMM",
-        and "inpcrd" is set of md_engine=="AMBER". This option is not
-        configurable.''')
-
     sampler = Instance('msmaccelerator.server.sampling.CentroidSampler')
     # this class attributes lets us configure the sampler on the command
     # line from this app. very convenient.
@@ -69,18 +63,6 @@ class AdaptiveServer(BaseServer):
                    seed_structures='BaseSampler.seed_structures',
                    beta='CountsSampler.beta',
                    md_engine='AdaptiveServer.md_engine')
-
-    def _md_engine_changed(self, old, new):
-        """Keep state extension in sync with md_engine.
-
-        Whenever md_engine is changed, this callback executes and changes
-        state_extension"""
-        if new == 'OpenMM':
-            self.state_extension = 'xml'
-        elif new == 'AMBER':
-            self.state_extension = 'inpcrd'
-
-
 
     def start(self):
         # run the startup in the base class
@@ -132,18 +114,28 @@ class AdaptiveServer(BaseServer):
     ########################################################################
     # BEGIN HANDLERS FOR INCOMMING MESSAGES
     ########################################################################
-
-    def register_Simulator(self, header, content):
-        """Called at the when a Simulator device boots up. We give it
+    
+    def register_AmberSimulator(self, header, content):
+        """Called at the when an OpenMMSimulator device boots up. We give it
         starting conditions
         """
+        return self._register_Simulator(header.sender_id, '.inpcrd', '.nc')
+
+    def register_OpenMMSimulator(self, header, content):
+        """Called at the when an OpenMMSimulator device boots up. We give it
+        starting conditions
+        """
+        return self._register_Simulator(header.sender_id, '.xml', '.h5')
+
+    def _register_Simulator(self, sender_id, state_format, traj_format):
+        assert state_format in ['.xml', '.inpcrd'], 'invalid state format'
         starting_state_fn = os.path.join(self.starting_states_outdir,
-                                '%s.%s' % (header.sender_id, self.state_extension))
+                                         '%s.%s' % (sender_id, state_format))
         with open(starting_state_fn, 'w') as f:
             state = self.sampler.get_state()
             f.write(state)
 
-        self.send_message(header.sender_id, 'simulate', content={
+        self.send_message(sender_id, 'simulate', content={
             'starting_state': {
                 'protocol': 'localfs',
                 'path': os.path.abspath(starting_state_fn)
@@ -154,7 +146,8 @@ class AdaptiveServer(BaseServer):
             },
             'output': {
                 'protocol': 'localfs',
-                'path': os.path.join(os.path.abspath(self.traj_outdir), header.sender_id + '.h5'),
+                'path': os.path.join(os.path.abspath(self.traj_outdir),
+                                     sender_id + traj_format),
             },
         })
 
@@ -200,6 +193,8 @@ class AdaptiveServer(BaseServer):
     def simulation_done(self, header, content):
         """Called when a simulation finishes"""
         self.send_message(header.sender_id, 'acknowledge_receipt')
+        if not os.path.exists(content['output']['path']):
+            self.log.critical('Output file returned by simulation does not exist. %s' % content['output']['path'])
 
         session.add(Trajectory(
             time = datetime.fromtimestamp(header.time),

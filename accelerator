@@ -6,7 +6,7 @@ from msmaccelerator.model.modeler import Modeler
 from msmaccelerator.server.adaptiveserver import AdaptiveServer
 
 from msmaccelerator.core.app import RootApplication
-from msmaccelerator.simulate.simulation import Simulator
+from msmaccelerator.simulate.simulation import OpenMMSimulator
 from msmaccelerator.simulate.amber_simulation import AmberSimulator
 from msmaccelerator.core.mkprofile import MKProfile
 from msmaccelerator.interact.interactor import Interactor
@@ -14,7 +14,7 @@ from msmaccelerator.interact.interactor import Interactor
 def main():
     # register all of the apps as subcommands
     app = RootApplication.instance()
-    app.register_subcommand(AdaptiveServer, Modeler, Simulator, MKProfile,
+    app.register_subcommand(AdaptiveServer, Modeler, OpenMMSimulator, MKProfile,
                             Interactor, AmberSimulator)
     app.initialize()
     app.start()
