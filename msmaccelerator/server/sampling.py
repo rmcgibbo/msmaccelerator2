@@ -161,7 +161,7 @@ class CentroidSampler(BaseSampler):
         filename = self.model.traj_filenames[traj]
 
         # load up the generator from disk
-        traj = mdtraj.trajectory.load_hdf(filename, frame=frame)
+        traj = mdtraj.trajectory.load_hdf5(filename, frame=frame)
 
         self.log.info('Sampling from a multinimial. I choose '
                       'traj="%s", frame=%s', filename, frame)
