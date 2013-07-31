@@ -162,7 +162,6 @@ class CentroidSampler(BaseSampler):
 
         # load up the generator from disk
         traj = md.trajectory.load(filename)[frame]
-
         self.log.info('Sampling from a multinimial. I choose '
                       'traj="%s", frame=%s', filename, frame)
         return traj
