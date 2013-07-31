@@ -10,12 +10,12 @@ ioloop.install()  # this needs to come at the beginning
 
 # local
 from .sampling import CountsSampler
-from .openmm import OpenMMStateBuilder
+from .statebuilder import OpenMMStateBuilder, AmberStateBuilder
 from .baseserver import BaseServer
 from ..core.database import session, Model, Trajectory
 
 # ipython
-from IPython.utils.traitlets import Unicode, Instance
+from IPython.utils.traitlets import Unicode, Instance, Enum
 ##############################################################################
 # Classes
 ##############################################################################
@@ -32,9 +32,15 @@ class AdaptiveServer(BaseServer):
     """
 
     # configurables
+    md_engine = Enum(['OpenMM', 'AMBER'], config=True, default_value='OpenMM',
+        help='''Which MD engine do you want to configure the server to
+        iterface with? If 'OpenMM', the server will emit xml-serialized
+        states to simulators that connect. If 'AMBER', the server will
+        instead emit inpcrd files to the simulators.''')
     system_xml = Unicode('system.xml', config=True, help='''Path to the
         XML file containing the OpenMM system to propagate. This is required
-        by the server to properly serialize the starting conformations.''')
+        by the server, iff md_engine=='OpenMM', to properly serialize the
+        starting conformations.''')
     traj_outdir = Unicode('trajs/', config=True, help='''Directory on the local
         filesystem where output trajectories will be saved''')
     models_outdir = Unicode('models/', config=True, help='''Directory on
@@ -55,7 +61,8 @@ class AdaptiveServer(BaseServer):
     aliases = dict(zmq_port='BaseServer.zmq_port',
                    system_xml='AdaptiveServer.system_xml',
                    seed_structures='BaseSampler.seed_structures',
-                   beta='CountsSampler.beta')
+                   beta='CountsSampler.beta',
+                   md_engine='AdaptiveServer.md_engine')
 
     def start(self):
         # run the startup in the base class
@@ -83,7 +90,13 @@ class AdaptiveServer(BaseServer):
         """
         self.sampler = CountsSampler(config=self.config)
         self.sampler.log = self.log
-        self.sampler.statebuilder = OpenMMStateBuilder(self.system_xml)
+        if self.md_engine == 'OpenMM':
+            self.sampler.statebuilder = OpenMMStateBuilder(self.system_xml)
+        elif self.md_engine == 'AMBER':
+            self.sampler.statebuilder = AmberStateBuilder()
+        else:
+            raise ValueError('md_engine must be one of "OpenMM" or "AMBER": %s' % self.md_engine)
+
         self.log.info('Sampler loaded')
 
         last_model = session.query(Model).order_by(Model.time.desc()).get(1)
@@ -101,19 +114,28 @@ class AdaptiveServer(BaseServer):
     ########################################################################
     # BEGIN HANDLERS FOR INCOMMING MESSAGES
     ########################################################################
-
-    def register_Simulator(self, header, content):
-        """Called at the when a Simulator device boots up. We give it
+    
+    def register_AmberSimulator(self, header, content):
+        """Called at the when an OpenMMSimulator device boots up. We give it
         starting conditions
         """
+        return self._register_Simulator(header.sender_id, '.inpcrd', '.nc')
 
+    def register_OpenMMSimulator(self, header, content):
+        """Called at the when an OpenMMSimulator device boots up. We give it
+        starting conditions
+        """
+        return self._register_Simulator(header.sender_id, '.xml', '.h5')
+
+    def _register_Simulator(self, sender_id, state_format, traj_format):
+        assert state_format in ['.xml', '.inpcrd'], 'invalid state format'
         starting_state_fn = os.path.join(self.starting_states_outdir,
-                                         '%s.xml' % header.sender_id)
+                                         '%s.%s' % (sender_id, state_format))
         with open(starting_state_fn, 'w') as f:
-            state = self.sampler.sample_xml_state()
+            state = self.sampler.get_state()
             f.write(state)
 
-        self.send_message(header.sender_id, 'simulate', content={
+        self.send_message(sender_id, 'simulate', content={
             'starting_state': {
                 'protocol': 'localfs',
                 'path': os.path.abspath(starting_state_fn)
@@ -124,7 +146,8 @@ class AdaptiveServer(BaseServer):
             },
             'output': {
                 'protocol': 'localfs',
-                'path': os.path.join(os.path.abspath(self.traj_outdir), header.sender_id + '.h5'),
+                'path': os.path.join(os.path.abspath(self.traj_outdir),
+                                     sender_id + traj_format),
             },
         })
 
@@ -170,6 +193,8 @@ class AdaptiveServer(BaseServer):
     def simulation_done(self, header, content):
         """Called when a simulation finishes"""
         self.send_message(header.sender_id, 'acknowledge_receipt')
+        if not os.path.exists(content['output']['path']):
+            self.log.critical('Output file returned by simulation does not exist. %s' % content['output']['path'])
 
         session.add(Trajectory(
             time = datetime.fromtimestamp(header.time),
