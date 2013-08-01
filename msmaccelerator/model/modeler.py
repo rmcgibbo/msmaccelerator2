@@ -7,6 +7,7 @@ ZMQ device that builds an MSM and saves it to disk.
 
 import os
 import numpy as np
+import pickle
 
 # mdtraj
 import mdtraj.trajectory
@@ -64,6 +65,10 @@ class Modeler(Device):
         your model, but is inappropriate in the sparse-data regime when you're
         using min-counts sampling, because these are precisiely the states that
         you're most interested in.''')
+    use_custom_metric = Bool(False, config=True, help='''Should we use
+         a custom distance metric for clusering instead of RMSD?''')
+    custom_metric_path = Unicode('metric.pickl', config=True, help='''File
+         containing a pickled metric for use in clustering.''')
 
     aliases = dict(stride='Modeler.stride',
                    lag_time='Modeler.lag_time',
@@ -92,10 +97,14 @@ class Modeler(Device):
         trajs = self.load_trajectories(content.traj_fns)
 
         # run clustering
-        assignments, generator_indices = self.cluster(trajs)
+        if use_custom_metric:
+            metric = custom_metric_path
+        else:
+            metric = None
+        assignments, generator_indices = self.cluster(trajs, metric)
 
         # build the MSM
-        counts, rev_counts, t_matrix, populations, mapping =  self.build_msm(assignments)
+        counts, rev_counts, t_matrix, populations, mapping = self.build_msm(assignments)
 
         # save the results to disk
         msm = MarkovStateModel(counts=counts, reversible_counts=rev_counts,
@@ -150,7 +159,7 @@ class Modeler(Device):
 
         return trajs
 
-    def cluster(self, trajectories):
+    def cluster(self, trajectories, metric):
         """Cluster the trajectories into microstates.
 
         Returns
@@ -168,7 +177,13 @@ class Modeler(Device):
             is in trajectory `k`, in its `l`th frame. Because of the striding,
             `l` will always be a multiple of `self.stride`.
         """
-        metric = msmbuilder.metrics.RMSD()
+        if metric is None:
+            metric = msmbuilder.metrics.RMSD()
+        else:
+            print("Loading custom metric: %s" % custom_metric_path)
+            pickle_file = open(custom_metric_path)
+            metric = pickle.load(pickle_file)
+
         clusterer = msmbuilder.clustering.KCenters(metric, trajectories,
                                         distance_cutoff=self.rmsd_distance_cutoff)
         assignments = clusterer.get_assignments()
@@ -187,7 +202,7 @@ class Modeler(Device):
 
         # but these indices are still with respect to the traj/frame
         # after striding, so we need to unstride them
-        generator_indices[:,1] *= self.stride
+        generator_indices[:, 1] *= self.stride
 
         # print generator_indices
 

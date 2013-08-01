@@ -17,15 +17,15 @@ import subprocess
 # GLOBALS
 #############################################################################
 
-N_ROUNDS = 1000
-N_ENGINES = 1
+N_ROUNDS = 100
+N_ENGINES = 4
 
 #############################################################################
 # Script
 #############################################################################
 
 # start the server independently
-server = subprocess.Popen(['../accelerator', 'serve'])
+server = subprocess.Popen(['accelerator', 'serve'])
 
 # we're going to run N_ROUNDS of adaptive sampling
 for i in range(N_ROUNDS):
@@ -34,8 +34,10 @@ for i in range(N_ROUNDS):
     pids = set()  # keep track of the pids of all of the engines we start
     for j in range(N_ENGINES):
         # each of these engines will run a single trajectory
-        proc = subprocess.Popen(['../accelerator', 'simulate'])
+        proc = subprocess.Popen(['accelerator', 'simulate',
+            '--device_index='+str(j)])
         pids.add(proc.pid)
+        time.sleep(1)
 
     # wait on the engines to finish
     while pids:
@@ -44,7 +46,7 @@ for i in range(N_ROUNDS):
         pids.remove(pid)
 
     # build MSM
-    proc = subprocess.Popen(['../accelerator', 'model'])
+    proc = subprocess.Popen(['accelerator', 'model'])
     proc.wait()
 
 # we're all done, so lets shut down the server
