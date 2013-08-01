@@ -22,7 +22,7 @@ from ..core.device import Device
 
 class OpenMMSimulator(Device):
     name = 'OpenMM'
-    path = 'msmaccelerator.simulate.simulation.Simulator'
+    path = 'msmaccelerator.simulate.simulation.OpenMMSimulator'
     short_description = 'Run a single round of dynamics with OpenMM'
     long_description = '''This device will connect to the msmaccelerator server,
         request the initial conditions with which to start a simulation, and
@@ -59,14 +59,14 @@ class OpenMMSimulator(Device):
     # expose these as command line flags on --help
     # other settings can still be specified on the command line, its just
     # less convenient
-    aliases = dict(system_xml='Simulator.system_xml',
-                  integrator_xml='Simulator.integrator_xml',
-                  number_of_steps='Simulator.number_of_steps',
-                  report_interval='Simulator.report_interval',
+    aliases = dict(system_xml='OpenMMSimulator.system_xml',
+                  integrator_xml='OpenMMSimulator.integrator_xml',
+                  number_of_steps='OpenMMSimulator.number_of_steps',
+                  report_interval='OpenMMSimulator.report_interval',
                   zmq_port='Device.zmq_port',
                   zmq_url='Device.zmq_url',
-                  platform='Simulator.platform',
-                  device_index='Simulator.device_index')
+                  platform='OpenMMSimulator.platform',
+                  device_index='OpenMMSimulator.device_index')
 
 
     def start(self):
