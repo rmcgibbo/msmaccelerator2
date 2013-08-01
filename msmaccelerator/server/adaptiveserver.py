@@ -12,7 +12,7 @@ ioloop.install()  # this needs to come at the beginning
 from .sampling import CountsSampler
 from .statebuilder import OpenMMStateBuilder, AmberStateBuilder
 from .baseserver import BaseServer
-from ..core.database import session, Model, Trajectory
+from ..core.database import session, Model, Trajectory, StartingState
 
 # ipython
 from IPython.utils.traitlets import Unicode, Instance, Enum
@@ -199,7 +199,12 @@ class AdaptiveServer(BaseServer):
         session.add(Trajectory(
             time = datetime.fromtimestamp(header.time),
             protocol = content['output']['protocol'],
-            path = content['output']['path']
+            path = content['output']['path'],
+            starting_state = [StartingState(
+                    time = datetime.fromtimestamp(header.time),
+                    protocol = content['starting_state']['protocol'],
+                    path = content['starting_state']['path']                    
+            )]
         ))
         session.commit()
 

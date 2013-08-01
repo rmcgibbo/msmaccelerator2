@@ -107,6 +107,7 @@ class OpenMMSimulator(Device):
         """
         self.log.info('Setting up simulation...')
         state, topology = self.deserialize_input(content)
+        starting_state_path = content.starting_state.path
 
         # set the GPU platform
         platform = Platform.getPlatformByName(str(self.platform))
@@ -158,6 +159,10 @@ class OpenMMSimulator(Device):
         # tell the master that I'm done
         self.send_recv(msg_type='simulation_done', content={
             'status': 'success',
+            'starting_state': {
+                    'protocol': 'localfs',
+                    'path': starting_state_path
+            },
             'output': {
                 'protocol': 'localfs',
                 'path': content.output.path

@@ -6,9 +6,9 @@ from threading import Lock
 
 import sqlalchemy.exc
 from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 
 ##############################################################################
 # Globals
@@ -31,17 +31,29 @@ class Model(_Base):
     time = Column(DateTime)
     protocol = Column(String(500))
     path = Column(String(500))
-    
+
     def __str__(self):
         return "<Model path=%s>" % self.path
 
 class Trajectory(_Base):
     __tablename__ = 'trajectories'
+
+    id = Column(Integer, primary_key=True)
+    time = Column(DateTime)
+    protocol = Column(String(500))
+    path = Column(String(500))
+    
+    starting_state = relationship("StartingState", backref='trajectories')
+
+class StartingState(_Base):
+    __tablename__ = 'starting_states'
     
     id = Column(Integer, primary_key=True)
     time = Column(DateTime)
     protocol = Column(String(500))
     path = Column(String(500))
+    
+    traj_id = Column(Integer, ForeignKey('trajectories.id'))
 
 
 ##############################################################################
