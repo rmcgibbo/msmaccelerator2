@@ -76,7 +76,7 @@ class OpenMMSimulator(Device):
         with open(self.integrator_xml) as f:
             self.integrator = XmlSerializer.deserialize(f.read())
 
-        super(Simulator, self).start()
+        super(OpenMMSimulator, self).start()
 
     def on_startup_message(self, msg):
         """This method is called when the device receives its startup message
