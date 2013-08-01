@@ -97,8 +97,8 @@ class Modeler(Device):
         trajs = self.load_trajectories(content.traj_fns)
 
         # run clustering
-        if use_custom_metric:
-            metric = custom_metric_path
+        if self.use_custom_metric:
+            metric = self.custom_metric_path
         else:
             metric = None
         assignments, generator_indices = self.cluster(trajs, metric)
@@ -110,7 +110,8 @@ class Modeler(Device):
         msm = MarkovStateModel(counts=counts, reversible_counts=rev_counts,
             transition_matrix=t_matrix, populations=populations, mapping=mapping,
             generator_indices=generator_indices, traj_filenames=content.traj_fns,
-            assignments_stride=self.stride, lag_time=self.lag_time)
+            assignments_stride=self.stride, lag_time=self.lag_time,
+            assignments=assignments)
         msm.save(content.output.path)
 
         # tell the server that we're done
@@ -159,7 +160,7 @@ class Modeler(Device):
 
         return trajs
 
-    def cluster(self, trajectories, metric):
+    def cluster(self, trajectories, metric_path):
         """Cluster the trajectories into microstates.
 
         Returns
@@ -177,11 +178,11 @@ class Modeler(Device):
             is in trajectory `k`, in its `l`th frame. Because of the striding,
             `l` will always be a multiple of `self.stride`.
         """
-        if metric is None:
+        if metric_path is None:
             metric = msmbuilder.metrics.RMSD()
         else:
-            print("Loading custom metric: %s" % custom_metric_path)
-            pickle_file = open(custom_metric_path)
+            print("Loading custom metric: %s" % metric_path)
+            pickle_file = open(metric_path)
             metric = pickle.load(pickle_file)
 
         clusterer = msmbuilder.clustering.KCenters(metric, trajectories,
