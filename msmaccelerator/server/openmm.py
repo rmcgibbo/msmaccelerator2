@@ -44,13 +44,15 @@ class OpenMMStateBuilder(object):
             positions and the box vectors (if you're using periodic boundary
             conditions)
         """
+        periodic = False
         if trajectory.unitcell_vectors is not None:
             a, b, c = trajectory.unitcell_lengths[0]
             np.testing.assert_array_almost_equal(trajectory.unitcell_angles[0], np.ones(3)*90)
             self.context.setPeriodicBoxVectors([a, 0, 0] * nanometers, [0, b, 0] * nanometers, [0, 0, c] * nanometers)
+            periodic = True
 
         self.context.setPositions(trajectory.openmm_positions(0))
         state = self.context.getState(getPositions=True, getVelocities=True,
                                       getForces=True, getEnergy=True,
-                                      getParameters=True, enforcePeriodicBox=True)
+                                      getParameters=True, enforcePeriodicBox=periodic)
         return XmlSerializer.serialize(state)
