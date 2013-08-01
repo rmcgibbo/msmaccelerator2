@@ -5,6 +5,7 @@ ZMQ device that builds an MSM and saves it to disk.
 # Imports
 ##############################################################################
 
+import os
 import numpy as np
 
 # mdtraj
@@ -19,6 +20,7 @@ import msmbuilder.clustering
 from ..core.markovstatemodel import MarkovStateModel
 from ..core.device import Device
 
+from ..core.traitlets import FilePath
 from IPython.utils.traitlets import Unicode, Int, Float, Enum, Bool
 
 #############################################################################
@@ -38,13 +40,15 @@ class Modeler(Device):
 
     stride = Int(1, config=True, help='''Subsample data by taking only
         every stride-th point''')
+    topology_pdb = FilePath(config=True, extension='.pdb', help='''PDB file
+        giving the topology of the system''')
     lag_time = Int(1, config=True, help='''Lag time for building the
         model, in units of the stride. Currently, we are not doing the step
         in MSMBuilder that is refered to as "assignment", where you assign
         the remaining data that was not used during clustering to the cluster
         centers that were identified.''')
-    rmsd_atom_indices = Unicode('AtomIndices.dat', config=True, help='''File
-        containing the indices of atoms to use in the RMSD computation. Using
+    rmsd_atom_indices = FilePath('AtomIndices.dat', extension='.dat', config=True,
+        help='''File containing the indices of atoms to use in the RMSD computation. Using
         a PDB as input, this file can be created with the MSMBuilder script
         CreateAtomIndices.py''')
     rmsd_distance_cutoff = Float(0.2, config=True, help='''Distance cutoff for
@@ -65,7 +69,7 @@ class Modeler(Device):
                    lag_time='Modeler.lag_time',
                    rmsd_atom_indices='Modeler.rmsd_atom_indices',
                    rmsd_distance_cutoff='Modeler.rmsd_distance_cutoff',
-                   conf_pdb='Modeler.conf_pdb',
+                   topology_pdb='Modeler.topology_pdb',
                    symmetrize='Modeler.symmetrize',
                    trim='Modeler.ergodic_trimming',
                    zmq_url='Device.zmq_url',
@@ -114,15 +118,26 @@ class Modeler(Device):
         the atom indices"""
 
         trajs = []
-        atom_indices = np.loadtxt(self.rmsd_atom_indices, dtype=int)
+        if os.path.exists(self.rmsd_atom_indices):
+            self.log.info('Loading atom indices from %s', self.rmsd_atom_indices)
+            atom_indices = np.loadtxt(self.rmsd_atom_indices, dtype=np.int)
+        else:
+            self.log.info('Skipping loading atom_indices. Using all.')
+            atom_indices = None
 
         for traj_fn in traj_fns:
             # use the mdtraj dcd reader, but then monkey-patch
             # the coordinate array into shim for the msmbuilder clustering
             # code that wants the trajectory to act like a dict with the XYZList
             # key.
-            t = mdtraj.trajectory.load(traj_fn)
-            t2 = ShimTrajectory(t.xyz[::self.stride, atom_indices, :])
+            self.log.info('Loading traj %s', traj_fn)
+            if not os.path.exists(traj_fn):
+                self.log.error('Traj file reported by server does not exist: %s' % traj_fn)
+                continue
+
+            t = mdtraj.trajectory.load(traj_fn, atom_indices=atom_indices,
+                                       top=self.topology_pdb)
+            t2 = ShimTrajectory(t.xyz[::self.stride, :])
 
             trajs.append(t2)
 

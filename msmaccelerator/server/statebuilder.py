@@ -1,9 +1,14 @@
 """
-Code for the server's interaction with OpenMM
+Code for the server to build serialized states to send to the client
 """
 ##############################################################################
 # Imports
 ##############################################################################
+
+import os
+import abc
+import datetime
+from cStringIO import StringIO
 
 import numpy as np
 from simtk.unit import femtoseconds, nanometers
@@ -13,8 +18,22 @@ from simtk.openmm import Context, Platform, XmlSerializer, VerletIntegrator
 # Classes
 ##############################################################################
 
+class StateBuilder(object):
+    __metaclass__ = abc.ABCMeta
 
-class OpenMMStateBuilder(object):
+    @abc.abstractmethod
+    def build(self, trajectory):
+        """Create a serialized state from the first frame in a trajectory
+
+        Parameters
+        ----------
+        trajectory : mdtraj.trajectory.Trajectory
+            The trajectory to take the frame from.
+        """
+        pass
+
+
+class OpenMMStateBuilder(StateBuilder):
     """Build an OpenMM "state" that can be sent to a device to simulate.
     """
     def __init__(self, system, integrator=None):
@@ -35,7 +54,7 @@ class OpenMMStateBuilder(object):
         self.context = Context(system, integrator, Platform.getPlatformByName('Reference'))
 
     def build(self, trajectory):
-        """Create a serialized state from the first frame in a trajectory
+        """Create a serialized XML state from the first frame in a trajectory
 
         Parameteters
         ------------
@@ -56,3 +75,41 @@ class OpenMMStateBuilder(object):
                                       getForces=True, getEnergy=True,
                                       getParameters=True, enforcePeriodicBox=periodic)
         return XmlSerializer.serialize(state)
+
+
+class AmberStateBuilder(StateBuilder):
+    def build(self, trajectory):
+        """Create a serialized inpcrd from the first frame in a trajectory
+
+        Parameteters
+        ------------
+        trajectory : mdtraj.trajectory.Trajectory
+            The trajectory to take the frame from. We'll use both the the
+            positions and the box vectors (if you're using periodic boundary
+            conditions)
+        """
+        buf = StringIO()
+
+        print >>buf, str(datetime.datetime.now())
+        print >>buf, '%5d' % trajectory.n_atoms
+
+        linecount = 0
+        for atom in range(trajectory.n_atoms):
+            for dim in range(3):
+                # need to convert from nm to angstroms by multiplying by ten
+                fmt = '%12.7f' % (10 * trajectory.xyz[0, atom, dim])
+                assert len(fmt) == 12, 'fmt overflowed writing inpcrd. blowup?'
+                buf.write(fmt)
+                linecount += 1
+                if linecount >= 6:
+                    buf.write(os.linesep)
+                    linecount = 0
+
+        if trajectory.unitcell_lengths != None:
+            if linecount != 0:
+                buf.write(os.linesep)
+            box = (trajectory.unitcell_lengths[0]*10).tolist()
+            box.extend(trajectory.unitcell_angles[0].tolist())
+            buf.write(('%12.7f' * 6) % tuple(box))
+    
+        return buf.getvalue()
