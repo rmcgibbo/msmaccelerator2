@@ -36,8 +36,8 @@ class Modeler(Device):
     long_description = '''This device will connect to the msmaccelerator server,
         request the currently available data and build an MSM. That MSM will be
         used by the server to drive future rounds of adaptive sampling.
-        Currently, we're using RMSD clustering with the K-centers distance
-        metric. We can make this more configurable in the future.'''
+        Currently, you can use either RMSD (built-in) or a custom distance metric
+        (provide the pickle file) with K-centers clustering algorithm.'''
 
     stride = Int(1, config=True, help='''Subsample data by taking only
         every stride-th point''')
@@ -49,10 +49,10 @@ class Modeler(Device):
         the remaining data that was not used during clustering to the cluster
         centers that were identified.''')
     rmsd_atom_indices = FilePath('AtomIndices.dat', extension='.dat', config=True,
-        help='''File containing the indices of atoms to use in the RMSD computation. Using
-        a PDB as input, this file can be created with the MSMBuilder script
-        CreateAtomIndices.py''')
-    rmsd_distance_cutoff = Float(0.2, config=True, help='''Distance cutoff for
+        help='''File containing the indices of atoms to use in the RMSD
+        computation. Using a PDB as input, this file can be created with
+        the MSMBuilder script CreateAtomIndices.py''')
+    kcenters_distance_cutoff = Float(0.2, config=True, help='''Distance cutoff for
         clustering, in nanometers. We will continue to create new clusters
         until each data point is within this cutoff from its cluster center.''')
     symmetrize = Enum(['MLE', 'Transpose', None], default='MLE', config=True,
@@ -73,7 +73,7 @@ class Modeler(Device):
     aliases = dict(stride='Modeler.stride',
                    lag_time='Modeler.lag_time',
                    rmsd_atom_indices='Modeler.rmsd_atom_indices',
-                   rmsd_distance_cutoff='Modeler.rmsd_distance_cutoff',
+                   kcenters_distance_cutoff='Modeler.kcenters_distance_cutoff',
                    topology_pdb='Modeler.topology_pdb',
                    symmetrize='Modeler.symmetrize',
                    trim='Modeler.ergodic_trimming',
@@ -183,7 +183,7 @@ class Modeler(Device):
             metric = msmbuilder.metrics.RMSD()
 
         clusterer = msmbuilder.clustering.KCenters(metric, trajectories,
-                                        distance_cutoff=self.rmsd_distance_cutoff)
+                                        distance_cutoff=self.kcenters_distance_cutoff)
         assignments = clusterer.get_assignments()
 
         # if we get the generators as a trajectory, it will only
