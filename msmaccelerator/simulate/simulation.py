@@ -5,9 +5,12 @@ structure, and then propagate.
 # Imports
 ##############################################################################
 
+import os
+import sys
 import numpy as np
 from IPython.utils.traitlets import Unicode, CInt, Instance, Bool, Enum
 from mdtraj.reporters import HDF5Reporter
+import simtk.openmm as mm
 from simtk.openmm import XmlSerializer, Platform
 from simtk.openmm.app import (Simulation, PDBFile)
 
@@ -73,8 +76,18 @@ class OpenMMSimulator(Device):
         # load up the system and integrator files
         with open(self.system_xml) as f:
             self.system = XmlSerializer.deserialize(f.read())
+            # reset the random number seed for any random
+            # forces (andersen thermostat, montecarlo barostat)
+            for i in range(self.system.getNumForces()):
+                force = self.system.getForce(i)
+                if hasattr(force, 'setRandomNumberSeed'):
+                    force.setRandomNumberSeed(random_seed())
         with open(self.integrator_xml) as f:
             self.integrator = XmlSerializer.deserialize(f.read())
+
+            # reset the random number seed for a stochastic integrator
+            if hasattr(self.integrator, 'setRandomNumberSeed'):
+                self.integrator.setRandomNumberSeed(random_seed())
 
         super(OpenMMSimulator, self).start()
 
@@ -222,3 +235,25 @@ class OpenMMSimulator(Device):
 
         simulation.reporters.append(callback_reporter)
         simulation.reporters.append(h5_reporter)
+
+
+###############################################################################
+# Utilities
+###############################################################################
+
+def random_seed():
+    """Get a seed for a random number generator, based on the current platform,
+    pid, and wall clock time.
+
+    Returns
+    -------
+    seed : int
+        The seed is a 32-bit int
+    """
+    import platform
+    import time
+    import hashlib
+    plt = ''.join(platform.uname())
+    seed = int(hashlib.md5('%s%s%s' % (plt, os.getpid(), time.time())).hexdigest(), 16)
+
+    return seed % np.iinfo(np.int32).max
