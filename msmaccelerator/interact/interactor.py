@@ -20,9 +20,17 @@ class Interactor(Device):
     short_description = 'Modify the parameters inside of a live server'
     long_description = ''
     
-    set_beta = Instance(int, config=True, help='''Set the server's beta
-        parameter''')
-    shell = Bool(False, config=True, help='''Go into interactive shell mode''')
+    # using Instance(float) instead of the more obvious Float trait
+    # to avoid setting a default value. Thus we can check wheter
+    # set_beta is None and see wheter the user actually wanted to change it.
+    set_beta = Instance(float, config=True, help='''Set the server's beta
+        parameter on the fly, changing the balance between exploration
+        and optimization of the already discovered pathways/rates. For
+        details this parameter affects the sampling. See the help text
+        for the CountsSampler.beta trait''')
+    shell = Bool(False, config=True, help='''Go into interactive shell mode,
+        in which you can interact with the server via an IPython
+        read-eval-print loop.''')
     db_path = Unicode('db.sqlite', config=True, help='''
         Path to the database (sqlite3 file)''')
 
