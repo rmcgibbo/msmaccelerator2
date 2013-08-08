@@ -20,7 +20,7 @@ class Interactor(Device):
     short_description = 'Modify the parameters inside of a live server'
     long_description = ''
     
-    set_beta = Instance(int, config=True, help='''Set the server's beta
+    set_beta = Instance(float, config=True, help='''Set the server's beta
         parameter''')
     shell = Bool(False, config=True, help='''Go into interactive shell mode''')
     db_path = Unicode('db.sqlite', config=True, help='''

@@ -40,7 +40,7 @@ class MarkovStateModel(HasTraits):
 
     @classmethod
     def load(cls, filename):
-        return cls(handle=tables.openFile(filename, 'r'))
+        return cls(handle=tables.open_file(filename, 'r'))
 
     def save(self, filename):
         kwargs = {}

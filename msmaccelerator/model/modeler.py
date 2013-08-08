@@ -52,7 +52,7 @@ class Modeler(Device):
         help='''File containing the indices of atoms to use in the RMSD
         computation. Using a PDB as input, this file can be created with
         the MSMBuilder script CreateAtomIndices.py''')
-    kcenters_distance_cutoff = Float(0.2, config=True, help='''Distance cutoff for
+    clustering_distance_cutoff = Float(0.2, config=True, help='''Distance cutoff for
         clustering, in nanometers. We will continue to create new clusters
         until each data point is within this cutoff from its cluster center.''')
     symmetrize = Enum(['MLE', 'Transpose', None], default='MLE', config=True,
@@ -69,11 +69,14 @@ class Modeler(Device):
          a custom distance metric for clusering instead of RMSD?''')
     custom_metric_path = Unicode('metric.pickl', config=True, help='''File
          containing a pickled metric for use in clustering.''')
+    clusterer = Enum(['kcenters', 'hybrid', 'ward'], default='kcenters',
+        config=True, help='''The method used for clustering structures in
+        the MSM.''')
 
     aliases = dict(stride='Modeler.stride',
                    lag_time='Modeler.lag_time',
                    rmsd_atom_indices='Modeler.rmsd_atom_indices',
-                   kcenters_distance_cutoff='Modeler.kcenters_distance_cutoff',
+                   clustering_distance_cutoff='Modeler.clustering_distance_cutoff',
                    topology_pdb='Modeler.topology_pdb',
                    symmetrize='Modeler.symmetrize',
                    trim='Modeler.ergodic_trimming',
@@ -182,9 +185,25 @@ class Modeler(Device):
         else:
             metric = msmbuilder.metrics.RMSD()
 
-        clusterer = msmbuilder.clustering.KCenters(metric, trajectories,
-                                        distance_cutoff=self.kcenters_distance_cutoff)
-        assignments = clusterer.get_assignments()
+        if self.clusterer == 'kcenters':
+            # Use k-centers clustering
+            clusterer = msmbuilder.clustering.KCenters(metric, trajectories,
+                    distance_cutoff=self.clustering_distance_cutoff)
+            assignments = clusterer.get_assignments()
+        elif self.clusterer == 'ward':
+            # Use ward clustering
+            clusterer = msmbuilder.clustering.Hierarchical(metric, trajectories,
+                    method='ward')
+            assignments = clusterer.get_assignments(self.clustering_distance_cutoff)
+        elif self.clusterer == 'hybrid':
+            # Use hybrid k-medoids clustering
+            clusterer = msmbuilder.clustering.HybridKMedoids(metric,
+                    trajectories, k=None,
+                    distance_cutoff=self.clustering_distance_cutoff)
+            assignments = clusterer.get_assignments()
+        else:
+            self.log.error("Please choose an actual clusterer")
+            
 
         # if we get the generators as a trajectory, it will only
         # have the reduced set of atoms.
