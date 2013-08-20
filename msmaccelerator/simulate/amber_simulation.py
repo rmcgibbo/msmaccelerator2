@@ -30,7 +30,7 @@ class AmberSimulator(Device):
         request the initial conditions with which to start a simulation, and
         propagate dynamics'''
     
-    mdin= FilePath(config=True, exists=True, isfile=True,
+    mdin = FilePath(config=True, exists=True, isfile=True,
         help="""AMBER .in file controlling the production run. If no production is
         desired, do not set this parameter.""")
     workdir = CBytes(config=True, help="""Directory to work in. If not set,
@@ -38,6 +38,7 @@ class AmberSimulator(Device):
         when we're finished. This option is useful for debugging.""")
     executable = Enum(['pmemd', 'pmemd.cuda', 'pmemd.cuda.MPI'], config=True,
         default_value='pmemd', help="Which AMBER executable to use?")
+    precommand = Unicode(u'', config=True, help="Something to run before the command, like mpirun")
     prmtop = FilePath(config=True, exists=True, isfile=True,
                       help="""Parameter/topology file for the system""")
 
@@ -48,6 +49,7 @@ class AmberSimulator(Device):
         return os.environ['AMBERHOME']
 
     aliases = dict(mdin='AmberSimulator.mdin',
+                   precommand='AmberSimulator.precommand',
                    prmtop='AmberSimulator.prmtop',
                    zmq_port='Device.zmq_port',
                    zmq_url='Device.zmq_url')
@@ -80,7 +82,7 @@ class AmberSimulator(Device):
             raise NotImplementedError('Only localfs transport is currently '
                                       'supported.')
 
-        template = '{binary} -O -i {mdin} -o {mdout} -p {prmtop} -c {inpcrd} -r {restart} -x {traj}'
+        template = '{precommand} {binary} -O -i {mdin} -o {mdout} -p {prmtop} -c {inpcrd} -r {restart} -x {traj}'
 
         # RUNNING PRODUCTION
         with cd_context('amber_workdir', logger=self.log):
@@ -92,7 +94,7 @@ class AmberSimulator(Device):
             cmd = template.format(binary=binary, mdin=relpath(self.mdin),
                                   mdout=mdout, prmtop=relpath(self.prmtop),
                                   inpcrd=relpath(content.starting_state.path),
-                                  restart=restart,
+                                  restart=restart, precommand=self.precommand,
                                   traj=relpath(content.output.path)).split()
             self.log.info('Executing Command: %s' % cmd)
             subprocess.check_output(cmd)
