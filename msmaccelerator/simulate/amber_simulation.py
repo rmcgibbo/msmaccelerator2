@@ -52,7 +52,8 @@ class AmberSimulator(Device):
                    precommand='AmberSimulator.precommand',
                    prmtop='AmberSimulator.prmtop',
                    zmq_port='Device.zmq_port',
-                   zmq_url='Device.zmq_url')
+                   zmq_url='Device.zmq_url',
+                   executable='AmberSimulator.executable')
 
     def start(self):
         super(AmberSimulator, self).start()
